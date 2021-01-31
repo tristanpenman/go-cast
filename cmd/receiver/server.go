@@ -2,58 +2,55 @@ package main
 
 import (
 	"crypto/tls"
-	"encoding/binary"
 	"fmt"
 	"net"
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/tristanpenman/go-cast/internal/message"
+	"github.com/tristanpenman/go-cast/internal/cast"
 )
 
-func handleClient(conn net.Conn) {
-	defer conn.Close()
+func sendDeviceAuthResponse(castChannel *cast.CastChannel) bool {
+	payloadBytes, err := proto.Marshal(&cast.DeviceAuthMessage{
+		Response: &cast.AuthResponse{},
+	})
 
-	lenBytes := make([]byte, 4)
-	msgBytes := make([]byte, 512)
-
-	for {
-		logger.Info("server: connection waiting")
-
-		n, err := conn.Read(lenBytes)
-		if err != nil {
-			logger.Error("server: connection read error", "err", err)
-			break
-		}
-
-		if n != 4 {
-			logger.Error("Failed to read length; too short")
-			break
-		}
-
-		if logger.IsDebug() {
-			lenInt := binary.BigEndian.Uint32(lenBytes)
-			logger.Debug(fmt.Sprintf("Message length: %d", lenInt))
-		}
-
-		// TODO: Make this handle split header and body packets properly
-		n, err = conn.Read(msgBytes)
-		if err != nil {
-			logger.Error("server: connection read error", "err", err)
-			break
-		}
-
-		var castMessage message.CastMessage
-		err = proto.Unmarshal(msgBytes[:n], &castMessage)
-		if err != nil {
-			logger.Warn("Failed to parse cast message", "err", err)
-			continue
-		}
-
-		logger.Info("Received message", "namespace", *castMessage.Namespace)
+	if err != nil {
+		logger.Error("failed to encode device auth response", "err", err)
+		return false
 	}
 
-	logger.Info("server: connection closed")
+	payloadType := cast.CastMessage_BINARY
+	return castChannel.Send(&cast.CastMessage{
+		Namespace: &cast.DeviceAuthNamespace,
+		PayloadBinary: payloadBytes,
+		PayloadType: &payloadType,
+	})
+}
+
+func handleClient(conn net.Conn) {
+	defer func() {
+		_ = conn.Close()
+		logger.Info("connection closed")
+	}()
+
+	castChannel := cast.CreateCastChannel(conn, logger)
+
+	for {
+		select {
+		case castMessage, ok := <-castChannel.Messages:
+			if castMessage != nil {
+				logger.Info("received", "message", castMessage)
+				if *castMessage.Namespace == cast.DeviceAuthNamespace {
+					sendDeviceAuthResponse(&castChannel)
+				}
+			}
+			if !ok {
+				logger.Info("channel closed")
+				return
+			}
+		}
+	}
 }
 
 func startServer(manifest map[string]string, iface string, port uint) {

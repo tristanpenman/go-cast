@@ -8,7 +8,7 @@
 // 	protoc        v3.14.0
 // source: internal/messages/cast_channel.proto
 
-package message
+package cast
 
 import (
 	proto "github.com/golang/protobuf/proto"

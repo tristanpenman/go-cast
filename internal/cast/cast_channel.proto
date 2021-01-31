@@ -4,7 +4,7 @@
 
 syntax = "proto2";
 
-option go_package = "github.com/tristanpenman/go-cast/internal/message";
+option go_package = "github.com/tristanpenman/go-cast/internal/channel";
 
 option optimize_for = LITE_RUNTIME;
 
