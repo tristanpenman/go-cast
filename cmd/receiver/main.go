@@ -10,6 +10,7 @@ import (
 
 func main() {
 	var certManifest = flag.String("cert-manifest", "", "path to certificate manifest")
+	var clientIp = flag.String("client-prefix", "", "optional client prefix, to limit connections")
 	var iface = flag.String("iface", "", "interface to listen on (optional)")
 	var port = flag.Uint("port", 8009, "port to listen on")
 
@@ -48,5 +49,5 @@ func main() {
 		}
 	}
 
-	startServer(manifest, *iface, *port)
+	startServer(manifest, clientIp, iface, port)
 }

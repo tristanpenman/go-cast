@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/golang/protobuf/proto"
 
@@ -53,18 +54,18 @@ func handleClient(conn net.Conn) {
 	}
 }
 
-func startServer(manifest map[string]string, iface string, port uint) {
+func startServer(manifest map[string]string, clientPrefix *string, iface *string, port *uint) {
 	cert, err := tls.X509KeyPair([]byte(manifest["pu"]), []byte(manifest["pr"]))
 	if err != nil {
-		logger.Error("Failed to load X509 keypair", "err", err)
+		logger.Error("failed to load X509 keypair", "err", err)
 		return
 	}
 
 	cfg := &tls.Config{Certificates: []tls.Certificate{cert}}
-	addr := fmt.Sprintf("%s:%d", iface, port)
+	addr := fmt.Sprintf("%s:%d", *iface, *port)
 	listener, err := tls.Listen("tcp", addr, cfg)
 	if err != nil {
-		logger.Error("Failed to listen", "err", err)
+		logger.Error("failed to listen", "err", err)
 		return
 	}
 
@@ -73,12 +74,16 @@ func startServer(manifest map[string]string, iface string, port uint) {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			logger.Info("server: accept failed", "err", err)
+			logger.Error("server accept failed", "err", err)
 			break
 		}
 
-		logger.Info("server: accepted connection", "remote addr", conn.RemoteAddr())
-
-		go handleClient(conn)
+		if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
+			logger.Info("accepted connection", "remote addr", conn.RemoteAddr())
+			go handleClient(conn)
+		} else {
+			logger.Debug("ignored connection", "remote addr", conn.RemoteAddr())
+			_ = conn.Close()
+		}
 	}
 }
