@@ -21,13 +21,13 @@ func sendDeviceAuthChallenge(castChannel *cast.CastChannel) bool {
 
 	payloadType := cast.CastMessage_BINARY
 	return castChannel.Send(&cast.CastMessage{
-		Namespace: &cast.DeviceAuthNamespace,
+		Namespace:     &cast.DeviceAuthNamespace,
 		PayloadBinary: payloadBytes,
-		PayloadType: &payloadType,
+		PayloadType:   &payloadType,
 	})
 }
 
-func startClient(hostname *string, port *uint) {
+func startClient(hostname *string, port *uint, authChallenge bool) {
 	addr := fmt.Sprintf("%s:%d", *hostname, *port)
 	logger.Info(fmt.Sprintf("addr: %s", addr))
 
@@ -45,7 +45,9 @@ func startClient(hostname *string, port *uint) {
 
 	castChannel := cast.CreateCastChannel(conn, logger)
 
-	sendDeviceAuthChallenge(&castChannel)
+	if authChallenge {
+		sendDeviceAuthChallenge(&castChannel)
+	}
 
 	for {
 		select {

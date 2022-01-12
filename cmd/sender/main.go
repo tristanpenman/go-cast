@@ -5,8 +5,16 @@ import (
 )
 
 func main() {
-	var hostname = flag.String("hostname", "localhost", "receiver address or hostname")
+	var hostname = flag.String("hostname", "", "receiver address or hostname")
 	var port = flag.Uint("port", 8009, "receiver port")
+	var disableChallenge = flag.Bool("disable-challenge", false, "disable auth challenge")
 
-	startClient(hostname, port)
+	flag.Parse()
+
+	if *hostname == "" {
+		flag.PrintDefaults()
+		return
+	}
+
+	startClient(hostname, port, !*disableChallenge)
 }
