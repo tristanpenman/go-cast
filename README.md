@@ -4,6 +4,18 @@ This project is intended to offer a complete implementation of the [Google Cast]
 
 ## Usage
 
+### Discovery
+
+The `discovery` app allows you to locate Google Cast devices on your network, using mDNS.
+
+To run the discovery app in your local dev environment:
+
+    go run cmd/discovery/*.go
+
+Or to build an executable in `./bin/discovery`:
+
+    go build -o ./bin/discovery ./cmd/discovery
+
 ### Receiver
 
 To run the receiver in your local dev environment:
