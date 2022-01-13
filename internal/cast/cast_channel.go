@@ -12,8 +12,8 @@ import (
 var DeviceAuthNamespace = "urn:x-cast:com.google.cast.tp.deviceauth"
 
 type CastChannel struct {
-	conn net.Conn
-	logger hclog.Logger
+	conn     net.Conn
+	logger   hclog.Logger
 	Messages chan *CastMessage
 }
 
@@ -64,8 +64,8 @@ func CreateCastChannel(conn net.Conn, logger hclog.Logger) CastChannel {
 	}()
 
 	return CastChannel{
-		conn: conn,
-		logger: logger,
+		conn:     conn,
+		logger:   logger,
 		Messages: messages,
 	}
 }
