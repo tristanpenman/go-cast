@@ -6,5 +6,5 @@ import (
 
 var Logger = hclog.New(&hclog.LoggerOptions{
 	Name:  "go-cast",
-	Level: hclog.LevelFromString("INFO"),
+	Level: hclog.Info,
 })

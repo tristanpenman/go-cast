@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"sync"
 
 	. "github.com/tristanpenman/go-cast/internal"
 )
@@ -23,5 +24,13 @@ func main() {
 		"hostname", *hostname,
 		"port", port)
 
-	StartClient(hostname, port, !*disableChallenge)
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	client := NewClient(hostname, port, !*disableChallenge, &wg)
+	if client == nil {
+		return
+	}
+
+	wg.Wait()
 }

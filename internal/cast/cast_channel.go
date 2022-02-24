@@ -22,7 +22,7 @@ func CreateCastChannel(conn net.Conn, logger hclog.Logger) CastChannel {
 
 	go func() {
 		lenBytes := make([]byte, 4)
-		msgBytes := make([]byte, 512)
+		msgBytes := make([]byte, 4096)
 
 		for {
 			n, err := conn.Read(lenBytes)
@@ -48,6 +48,10 @@ func CreateCastChannel(conn net.Conn, logger hclog.Logger) CastChannel {
 				break
 			}
 
+			if logger.IsDebug() {
+				logger.Debug(fmt.Sprintf("Read: %d", n))
+			}
+
 			var castMessage CastMessage
 			err = proto.Unmarshal(msgBytes[:n], &castMessage)
 			if err != nil {
@@ -55,7 +59,9 @@ func CreateCastChannel(conn net.Conn, logger hclog.Logger) CastChannel {
 				break
 			}
 
-			logger.Debug("Received message", "namespace", *castMessage.Namespace)
+			if logger.IsDebug() {
+				logger.Debug("Received message", "namespace", *castMessage.Namespace)
+			}
 
 			messages <- &castMessage
 		}
