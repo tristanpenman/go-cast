@@ -18,6 +18,8 @@ Or to build an executable in `./bin/discovery`:
 
 ### Receiver
 
+The `receiver` app will start a Google Cast receiver, which can then be cast to from compatible senders.  
+
 To run the receiver in your local dev environment:
 
     go run cmd/receiver/*.go --cert-manifest=<path>
@@ -25,6 +27,8 @@ To run the receiver in your local dev environment:
 Or to build an executable in `./bin/receiver`:
 
     go build -o ./bin/receiver ./cmd/receiver
+
+The `receiver` app can also be run in relay mode, where it will handle device authentication, but otherwise forward all messages and data to another host.
 
 ### Sender
 
