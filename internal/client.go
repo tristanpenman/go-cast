@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"crypto/tls"
@@ -15,7 +15,7 @@ func sendDeviceAuthChallenge(castChannel *cast.CastChannel) bool {
 	})
 
 	if err != nil {
-		logger.Error("failed to encode device auth challenge", "err", err)
+		Logger.Error("failed to encode device auth challenge", "err", err)
 		return false
 	}
 
@@ -27,23 +27,23 @@ func sendDeviceAuthChallenge(castChannel *cast.CastChannel) bool {
 	})
 }
 
-func startClient(hostname *string, port *uint, authChallenge bool) {
+func StartClient(hostname *string, port *uint, authChallenge bool) {
 	addr := fmt.Sprintf("%s:%d", *hostname, *port)
-	logger.Info(fmt.Sprintf("addr: %s", addr))
+	Logger.Info(fmt.Sprintf("addr: %s", addr))
 
 	config := tls.Config{InsecureSkipVerify: true}
 	conn, err := tls.Dial("tcp", addr, &config)
 	if err != nil {
-		logger.Error("client: dial error", "err", err)
+		Logger.Error("client: dial error", "err", err)
 		return
 	}
 
 	defer func() {
 		_ = conn.Close()
-		logger.Info("connection closed")
+		Logger.Info("connection closed")
 	}()
 
-	castChannel := cast.CreateCastChannel(conn, logger)
+	castChannel := cast.CreateCastChannel(conn, Logger)
 
 	if authChallenge {
 		sendDeviceAuthChallenge(&castChannel)
@@ -53,10 +53,10 @@ func startClient(hostname *string, port *uint, authChallenge bool) {
 		select {
 		case castMessage, ok := <-castChannel.Messages:
 			if castMessage != nil {
-				logger.Info("received", "message", castMessage)
+				Logger.Info("received", "message", castMessage)
 			}
 			if !ok {
-				logger.Info("channel closed")
+				Logger.Info("channel closed")
 				return
 			}
 		}

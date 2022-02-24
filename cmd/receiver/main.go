@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+
+	. "github.com/tristanpenman/go-cast/internal"
 )
 
 func main() {
@@ -26,7 +28,7 @@ func main() {
 		return
 	}
 
-	logger.Info("args",
+	Logger.Info("args",
 		"cert-manifest", *certManifest,
 		"client-prefix", *clientPrefix,
 		"enable-mdns", *enableMdns,
@@ -38,7 +40,7 @@ func main() {
 	// read manifest from disk
 	data, err := ioutil.ReadFile(*certManifest)
 	if err != nil {
-		logger.Error("failed to read certificate manifest file from disk", "err", err)
+		Logger.Error("failed to read certificate manifest file from disk", "err", err)
 		return
 	}
 
@@ -52,16 +54,16 @@ func main() {
 	var manifest map[string]string
 	err = json.Unmarshal([]byte(s), &manifest)
 	if err != nil {
-		logger.Error("failed to parse certificate manifest file", "err", err)
+		Logger.Error("failed to parse certificate manifest file", "err", err)
 		return
 	}
 
-	if logger.IsDebug() {
-		logger.Debug("manifest contents")
+	if Logger.IsDebug() {
+		Logger.Debug("manifest contents")
 		for key, value := range manifest {
-			logger.Debug(fmt.Sprintf("%s: %s", key, value))
+			Logger.Debug(fmt.Sprintf("%s: %s", key, value))
 		}
 	}
 
-	startServer(manifest, clientPrefix, *enableMdns, iface, hostname, *port, relayHost, *relayPort)
+	StartServer(manifest, clientPrefix, *enableMdns, iface, hostname, *port, relayHost, *relayPort)
 }

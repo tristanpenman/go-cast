@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"crypto/tls"
@@ -19,7 +19,7 @@ func sendDeviceAuthResponse(castChannel *cast.CastChannel) bool {
 	})
 
 	if err != nil {
-		logger.Error("failed to encode device auth response", "err", err)
+		Logger.Error("failed to encode device auth response", "err", err)
 		return false
 	}
 
@@ -32,26 +32,26 @@ func sendDeviceAuthResponse(castChannel *cast.CastChannel) bool {
 }
 
 func relayCastMessage(conn net.Conn, castMessage *cast.CastMessage, relay *net.Conn) {
-	logger.Info("relay cast message")
+	Logger.Info("relay cast message")
 }
 
 func handleCastMessage(conn net.Conn, castMessage *cast.CastMessage) {
-	logger.Info("handle cast message")
+	Logger.Info("handle cast message")
 }
 
 func handleClient(clientConn net.Conn, relayConn *net.Conn) {
 	defer func() {
 		_ = clientConn.Close()
-		logger.Info("connection closed")
+		Logger.Info("connection closed")
 	}()
 
-	castChannel := cast.CreateCastChannel(clientConn, logger)
+	castChannel := cast.CreateCastChannel(clientConn, Logger)
 
 	for {
 		select {
 		case castMessage, ok := <-castChannel.Messages:
 			if castMessage != nil {
-				logger.Info("received", "message", castMessage)
+				Logger.Info("received", "message", castMessage)
 				if *castMessage.Namespace == cast.DeviceAuthNamespace {
 					sendDeviceAuthResponse(&castChannel)
 				} else if relayConn != nil {
@@ -61,7 +61,7 @@ func handleClient(clientConn net.Conn, relayConn *net.Conn) {
 				}
 			}
 			if !ok {
-				logger.Info("channel closed")
+				Logger.Info("channel closed")
 				return
 			}
 		}
@@ -69,7 +69,7 @@ func handleClient(clientConn net.Conn, relayConn *net.Conn) {
 }
 
 func startAdvertisement(hostname *string, port int) {
-	logger.Info("starting mdns...")
+	Logger.Info("starting mdns...")
 	if hostname == nil {
 		*hostname, _ = os.Hostname()
 	}
@@ -78,7 +78,7 @@ func startAdvertisement(hostname *string, port int) {
 	// TODO: Error handling
 	service, err := mdns.NewMDNSService("go-cast", "_googlecast._tcp", "", *hostname, port, nil, info)
 	if err != nil {
-		logger.Warn("failed to create mdns service", "err", err)
+		Logger.Warn("failed to create mdns service", "err", err)
 		return
 	}
 
@@ -87,14 +87,14 @@ func startAdvertisement(hostname *string, port int) {
 	})
 
 	if err != nil {
-		logger.Warn("failed to create mdns server", "err", err)
+		Logger.Warn("failed to create mdns server", "err", err)
 		return
 	}
 
-	logger.Info("started")
+	Logger.Info("started")
 }
 
-func startServer(
+func StartServer(
 	manifest map[string]string,
 	clientPrefix *string,
 	enableMdns bool,
@@ -106,7 +106,7 @@ func startServer(
 ) {
 	cert, err := tls.X509KeyPair([]byte(manifest["pu"]), []byte(manifest["pr"]))
 	if err != nil {
-		logger.Error("failed to load X509 keypair", "err", err)
+		Logger.Error("failed to load X509 keypair", "err", err)
 		return
 	}
 
@@ -114,18 +114,18 @@ func startServer(
 	addr := fmt.Sprintf("%s:%d", *iface, port)
 	listener, err := tls.Listen("tcp", addr, cfg)
 	if err != nil {
-		logger.Error("failed to listen", "err", err)
+		Logger.Error("failed to listen", "err", err)
 		return
 	}
 
 	defer func(listener net.Listener) {
 		err := listener.Close()
 		if err != nil {
-			logger.Error("failed to stop listening", "err", err)
+			Logger.Error("failed to stop listening", "err", err)
 		}
 	}(listener)
 
-	logger.Info("listening")
+	Logger.Info("listening")
 
 	if enableMdns {
 		startAdvertisement(hostname, port)
@@ -134,15 +134,15 @@ func startServer(
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			logger.Error("server accept failed", "err", err)
+			Logger.Error("server accept failed", "err", err)
 			break
 		}
 
 		if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
-			logger.Info("accepted connection", "remote addr", conn.RemoteAddr())
+			Logger.Info("accepted connection", "remote addr", conn.RemoteAddr())
 			go handleClient(conn, nil)
 		} else {
-			logger.Debug("ignored connection", "remote addr", conn.RemoteAddr())
+			Logger.Debug("ignored connection", "remote addr", conn.RemoteAddr())
 			_ = conn.Close()
 		}
 	}

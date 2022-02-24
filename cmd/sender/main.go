@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+
+	. "github.com/tristanpenman/go-cast/internal"
 )
 
 func main() {
@@ -16,10 +18,10 @@ func main() {
 		return
 	}
 
-	logger.Info("args",
+	Logger.Info("args",
 		"disable-challenge", disableChallenge,
 		"hostname", *hostname,
 		"port", port)
 
-	startClient(hostname, port, !*disableChallenge)
+	StartClient(hostname, port, !*disableChallenge)
 }

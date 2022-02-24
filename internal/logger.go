@@ -1,10 +1,10 @@
-package main
+package internal
 
 import (
 	"github.com/hashicorp/go-hclog"
 )
 
-var logger = hclog.New(&hclog.LoggerOptions{
-	Name:  "sender",
+var Logger = hclog.New(&hclog.LoggerOptions{
+	Name:  "go-cast",
 	Level: hclog.LevelFromString("INFO"),
 })
