@@ -13,6 +13,11 @@ import (
 	"github.com/tristanpenman/go-cast/internal/cast"
 )
 
+type Server struct {
+	conn        net.Conn
+	castChannel cast.CastChannel
+}
+
 func sendDeviceAuthResponse(castChannel *cast.CastChannel) bool {
 	payloadBytes, err := proto.Marshal(&cast.DeviceAuthMessage{
 		Response: &cast.AuthResponse{},
@@ -31,7 +36,7 @@ func sendDeviceAuthResponse(castChannel *cast.CastChannel) bool {
 	})
 }
 
-func relayCastMessage(conn net.Conn, castMessage *cast.CastMessage, relay *net.Conn) {
+func relayCastMessage(conn net.Conn, castMessage *cast.CastMessage, relayClient *Client) {
 	Logger.Info("relay cast message")
 }
 
@@ -39,7 +44,7 @@ func handleCastMessage(conn net.Conn, castMessage *cast.CastMessage) {
 	Logger.Info("handle cast message")
 }
 
-func handleClient(clientConn net.Conn, relayConn *net.Conn) {
+func handleClient(clientConn net.Conn, relayClient *Client) {
 	defer func() {
 		_ = clientConn.Close()
 		Logger.Info("connection closed")
@@ -54,8 +59,8 @@ func handleClient(clientConn net.Conn, relayConn *net.Conn) {
 				Logger.Info("received", "message", castMessage)
 				if *castMessage.Namespace == cast.DeviceAuthNamespace {
 					sendDeviceAuthResponse(&castChannel)
-				} else if relayConn != nil {
-					relayCastMessage(clientConn, castMessage, relayConn)
+				} else if relayClient != nil {
+					relayCastMessage(clientConn, castMessage, relayClient)
 				} else {
 					handleCastMessage(clientConn, castMessage)
 				}
@@ -101,8 +106,9 @@ func StartServer(
 	iface *string,
 	hostname *string,
 	port int,
-	relayHost *string,
-	relayPort int,
+	relayHost string,
+	relayPort uint,
+	relayAuthChallenge bool,
 ) {
 	cert, err := tls.X509KeyPair([]byte(manifest["pu"]), []byte(manifest["pr"]))
 	if err != nil {
@@ -131,6 +137,16 @@ func StartServer(
 		startAdvertisement(hostname, port)
 	}
 
+	// if relaying, attempt to connect to target
+	var relayClient *Client
+	if relayHost != "" {
+		relayClient = NewClient(relayHost, relayPort, relayAuthChallenge, nil)
+		if relayClient == nil {
+			Logger.Error("failed to connect to target")
+			return
+		}
+	}
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -140,7 +156,7 @@ func StartServer(
 
 		if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
 			Logger.Info("accepted connection", "remote addr", conn.RemoteAddr())
-			go handleClient(conn, nil)
+			go handleClient(conn, relayClient)
 		} else {
 			Logger.Debug("ignored connection", "remote addr", conn.RemoteAddr())
 			_ = conn.Close()

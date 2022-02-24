@@ -40,8 +40,8 @@ func sendDeviceAuthChallenge(castChannel *cast.CastChannel) bool {
 	})
 }
 
-func NewClient(hostname *string, port *uint, authChallenge bool, wg *sync.WaitGroup) *Client {
-	addr := fmt.Sprintf("%s:%d", *hostname, *port)
+func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGroup) *Client {
+	addr := fmt.Sprintf("%s:%d", hostname, port)
 	Logger.Info(fmt.Sprintf("addr: %s", addr))
 
 	config := tls.Config{InsecureSkipVerify: true}
@@ -71,7 +71,9 @@ func NewClient(hostname *string, port *uint, authChallenge bool, wg *sync.WaitGr
 				if !ok {
 					Logger.Info("channel closed")
 					_ = conn.Close()
-					wg.Done()
+					if wg != nil {
+						wg.Done()
+					}
 					return
 				}
 			}

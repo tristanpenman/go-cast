@@ -20,14 +20,14 @@ func main() {
 	}
 
 	Logger.Info("args",
-		"disable-challenge", disableChallenge,
+		"disable-challenge", *disableChallenge,
 		"hostname", *hostname,
-		"port", port)
+		"port", *port)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	client := NewClient(hostname, port, !*disableChallenge, &wg)
+	client := NewClient(*hostname, *port, !*disableChallenge, &wg)
 	if client == nil {
 		return
 	}

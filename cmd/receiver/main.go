@@ -19,7 +19,8 @@ func main() {
 	var iface = flag.String("iface", "", "interface to listen on (optional)")
 	var port = flag.Int("port", 8009, "port to listen on")
 	var relayHost = flag.String("relay-host", "", "relay to another Chromecast receiver (optional)")
-	var relayPort = flag.Int("relay-port", 8009, "port to relay to (optional)")
+	var relayPort = flag.Uint("relay-port", 8009, "port to relay to (optional)")
+	var relayAuthChallenge = flag.Bool("relay-auth-challenge", false, "send auth challenge when relaying")
 
 	flag.Parse()
 
@@ -35,7 +36,10 @@ func main() {
 		"fix-newlines", *fixNewlines,
 		"hostname", *hostname,
 		"iface", *iface,
-		"port", *port)
+		"port", *port,
+		"relay-host", *relayHost,
+		"relay-port", *relayPort,
+		"relay-auth-challenge", *relayAuthChallenge)
 
 	// read manifest from disk
 	data, err := ioutil.ReadFile(*certManifest)
@@ -65,5 +69,5 @@ func main() {
 		}
 	}
 
-	StartServer(manifest, clientPrefix, *enableMdns, iface, hostname, *port, relayHost, *relayPort)
+	StartServer(manifest, clientPrefix, *enableMdns, iface, hostname, *port, *relayHost, *relayPort, *relayAuthChallenge)
 }
