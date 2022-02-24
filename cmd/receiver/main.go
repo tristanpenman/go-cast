@@ -16,6 +16,8 @@ func main() {
 	var hostname = flag.String("hostname", "", "override default OS hostname (optional)")
 	var iface = flag.String("iface", "", "interface to listen on (optional)")
 	var port = flag.Int("port", 8009, "port to listen on")
+	var relayHost = flag.String("relay-host", "", "relay to another Chromecast receiver (optional)")
+	var relayPort = flag.Int("relay-port", 8009, "port to relay to (optional)")
 
 	flag.Parse()
 
@@ -61,5 +63,5 @@ func main() {
 		}
 	}
 
-	startServer(manifest, clientPrefix, *enableMdns, iface, hostname, *port)
+	startServer(manifest, clientPrefix, *enableMdns, iface, hostname, *port, relayHost, *relayPort)
 }

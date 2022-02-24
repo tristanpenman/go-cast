@@ -31,13 +31,21 @@ func sendDeviceAuthResponse(castChannel *cast.CastChannel) bool {
 	})
 }
 
-func handleClient(conn net.Conn) {
+func relayCastMessage(conn net.Conn, castMessage *cast.CastMessage, relay *net.Conn) {
+	logger.Info("relay cast message")
+}
+
+func handleCastMessage(conn net.Conn, castMessage *cast.CastMessage) {
+	logger.Info("handle cast message")
+}
+
+func handleClient(clientConn net.Conn, relayConn *net.Conn) {
 	defer func() {
-		_ = conn.Close()
+		_ = clientConn.Close()
 		logger.Info("connection closed")
 	}()
 
-	castChannel := cast.CreateCastChannel(conn, logger)
+	castChannel := cast.CreateCastChannel(clientConn, logger)
 
 	for {
 		select {
@@ -46,6 +54,10 @@ func handleClient(conn net.Conn) {
 				logger.Info("received", "message", castMessage)
 				if *castMessage.Namespace == cast.DeviceAuthNamespace {
 					sendDeviceAuthResponse(&castChannel)
+				} else if relayConn != nil {
+					relayCastMessage(clientConn, castMessage, relayConn)
+				} else {
+					handleCastMessage(clientConn, castMessage)
 				}
 			}
 			if !ok {
@@ -89,6 +101,8 @@ func startServer(
 	iface *string,
 	hostname *string,
 	port int,
+	relayHost *string,
+	relayPort int,
 ) {
 	cert, err := tls.X509KeyPair([]byte(manifest["pu"]), []byte(manifest["pr"]))
 	if err != nil {
@@ -126,7 +140,7 @@ func startServer(
 
 		if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
 			logger.Info("accepted connection", "remote addr", conn.RemoteAddr())
-			go handleClient(conn)
+			go handleClient(conn, nil)
 		} else {
 			logger.Debug("ignored connection", "remote addr", conn.RemoteAddr())
 			_ = conn.Close()
