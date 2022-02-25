@@ -10,8 +10,8 @@ import (
 )
 
 type ClientConnection struct {
-	conn        net.Conn
 	castChannel cast.CastChannel
+	conn        net.Conn
 	log         hclog.Logger
 	relayClient *Client
 }
@@ -42,6 +42,13 @@ func (clientConnection *ClientConnection) relayCastMessage(castMessage *cast.Cas
 
 func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.CastMessage) {
 	clientConnection.log.Info("handle cast message")
+	switch *castMessage.Namespace {
+	case heartbeatNamespace:
+		clientConnection.handleHeartbeatMessage(*castMessage.PayloadUtf8)
+		break
+	default:
+		clientConnection.log.Info("unhandled message", "namespace", *castMessage.Namespace)
+	}
 }
 
 func NewClientConnection(conn net.Conn, relayClient *Client) *ClientConnection {
@@ -55,8 +62,8 @@ func NewClientConnection(conn net.Conn, relayClient *Client) *ClientConnection {
 	castChannel := cast.CreateCastChannel(conn, log)
 
 	clientConnection := ClientConnection{
-		conn:        conn,
 		castChannel: castChannel,
+		conn:        conn,
 		log:         log,
 		relayClient: relayClient,
 	}
