@@ -3,6 +3,7 @@ package internal
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/hashicorp/go-hclog"
 	"net"
 	"sync"
 
@@ -14,15 +15,16 @@ import (
 type Client struct {
 	conn        net.Conn
 	castChannel cast.CastChannel
+	log         hclog.Logger
 }
 
-func sendDeviceAuthChallenge(castChannel *cast.CastChannel) bool {
+func (client *Client) sendDeviceAuthChallenge() bool {
 	payloadBytes, err := proto.Marshal(&cast.DeviceAuthMessage{
 		Challenge: &cast.AuthChallenge{},
 	})
 
 	if err != nil {
-		Logger.Error("failed to encode device auth challenge", "err", err)
+		client.log.Error("failed to encode device auth challenge", "err", err)
 		return false
 	}
 
@@ -30,31 +32,41 @@ func sendDeviceAuthChallenge(castChannel *cast.CastChannel) bool {
 	protocolVersion := cast.CastMessage_CASTV2_1_0
 	sourceId := "sender-0"
 	destinationId := "receiver-0"
-	return castChannel.Send(&cast.CastMessage{
+	message := cast.CastMessage{
 		DestinationId:   &destinationId,
 		Namespace:       &cast.DeviceAuthNamespace,
 		PayloadBinary:   payloadBytes,
 		PayloadType:     &payloadType,
 		ProtocolVersion: &protocolVersion,
 		SourceId:        &sourceId,
-	})
+	}
+
+	return client.castChannel.Send(&message)
 }
 
 func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGroup) *Client {
+	var log = NewLogger("client")
+
 	addr := fmt.Sprintf("%s:%d", hostname, port)
-	Logger.Info(fmt.Sprintf("addr: %s", addr))
+	log.Info(fmt.Sprintf("addr: %s", addr))
 
 	config := tls.Config{InsecureSkipVerify: true}
 	conn, err := tls.Dial("tcp", addr, &config)
 	if err != nil {
-		Logger.Error("client: dial error", "err", err)
+		log.Error("client: dial error", "err", err)
 		return nil
 	}
 
-	castChannel := cast.CreateCastChannel(conn, Logger)
+	castChannel := cast.CreateCastChannel(conn, log)
+
+	client := Client{
+		castChannel: castChannel,
+		conn:        conn,
+		log:         log,
+	}
 
 	if authChallenge {
-		sendDeviceAuthChallenge(&castChannel)
+		client.sendDeviceAuthChallenge()
 	}
 
 	go func() {
@@ -62,14 +74,14 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 			select {
 			case castMessage, ok := <-castChannel.Messages:
 				if castMessage != nil {
-					if Logger.IsDebug() {
-						Logger.Debug("received message", "content", castMessage)
+					if log.IsDebug() {
+						log.Debug("received message", "content", castMessage)
 					} else {
-						Logger.Info("received message", "namespace", *castMessage.Namespace)
+						log.Info("received message", "namespace", *castMessage.Namespace)
 					}
 				}
 				if !ok {
-					Logger.Info("channel closed")
+					log.Info("channel closed")
 					_ = conn.Close()
 					if wg != nil {
 						wg.Done()
@@ -80,12 +92,9 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 		}
 	}()
 
-	return &Client{
-		castChannel: castChannel,
-		conn:        conn,
-	}
+	return &client
 }
 
-func (client *Client) sendMessage(castMessage *cast.CastMessage) {
+func (client *Client) SendMessage(castMessage *cast.CastMessage) {
 	client.castChannel.Send(castMessage)
 }

@@ -3,163 +3,92 @@ package internal
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/hashicorp/go-hclog"
 	"net"
-	"os"
 	"strings"
-
-	"github.com/golang/protobuf/proto"
-	"github.com/hashicorp/mdns"
-
-	"github.com/tristanpenman/go-cast/internal/cast"
+	"sync"
 )
 
 type Server struct {
-	conn        net.Conn
-	castChannel cast.CastChannel
+	clientConnections []*ClientConnection
+	listener          net.Listener
+	log               hclog.Logger
+	wg                *sync.WaitGroup
 }
 
-func sendDeviceAuthResponse(castChannel *cast.CastChannel) bool {
-	payloadBytes, err := proto.Marshal(&cast.DeviceAuthMessage{
-		Response: &cast.AuthResponse{},
-	})
-
-	if err != nil {
-		Logger.Error("failed to encode device auth response", "err", err)
-		return false
-	}
-
-	payloadType := cast.CastMessage_BINARY
-	return castChannel.Send(&cast.CastMessage{
-		Namespace:     &cast.DeviceAuthNamespace,
-		PayloadBinary: payloadBytes,
-		PayloadType:   &payloadType,
-	})
-}
-
-func relayCastMessage(conn net.Conn, castMessage *cast.CastMessage, relayClient *Client) {
-	Logger.Info("relay cast message")
-}
-
-func handleCastMessage(conn net.Conn, castMessage *cast.CastMessage) {
-	Logger.Info("handle cast message")
-}
-
-func handleClient(clientConn net.Conn, relayClient *Client) {
-	defer func() {
-		_ = clientConn.Close()
-		Logger.Info("connection closed")
-	}()
-
-	castChannel := cast.CreateCastChannel(clientConn, Logger)
-
-	for {
-		select {
-		case castMessage, ok := <-castChannel.Messages:
-			if castMessage != nil {
-				Logger.Info("received", "message", castMessage)
-				if *castMessage.Namespace == cast.DeviceAuthNamespace {
-					sendDeviceAuthResponse(&castChannel)
-				} else if relayClient != nil {
-					relayCastMessage(clientConn, castMessage, relayClient)
-				} else {
-					handleCastMessage(clientConn, castMessage)
-				}
-			}
-			if !ok {
-				Logger.Info("channel closed")
-				return
-			}
-		}
-	}
-}
-
-func startAdvertisement(hostname *string, port int) {
-	Logger.Info("starting mdns...")
-	if hostname == nil {
-		*hostname, _ = os.Hostname()
-	}
-	info := []string{"test"}
-
-	// TODO: Error handling
-	service, err := mdns.NewMDNSService("go-cast", "_googlecast._tcp", "", *hostname, port, nil, info)
-	if err != nil {
-		Logger.Warn("failed to create mdns service", "err", err)
-		return
-	}
-
-	_, err = mdns.NewServer(&mdns.Config{
-		Zone: service,
-	})
-
-	if err != nil {
-		Logger.Warn("failed to create mdns server", "err", err)
-		return
-	}
-
-	Logger.Info("started")
-}
-
-func StartServer(
+func NewServer(
 	manifest map[string]string,
 	clientPrefix *string,
-	enableMdns bool,
 	iface *string,
 	hostname *string,
 	port int,
 	relayHost string,
 	relayPort uint,
 	relayAuthChallenge bool,
-) {
+	wg *sync.WaitGroup,
+) *Server {
+	var log = NewLogger("server")
+
 	cert, err := tls.X509KeyPair([]byte(manifest["pu"]), []byte(manifest["pr"]))
 	if err != nil {
-		Logger.Error("failed to load X509 keypair", "err", err)
-		return
+		log.Error("failed to load X509 keypair", "err", err)
+		return nil
 	}
 
 	cfg := &tls.Config{Certificates: []tls.Certificate{cert}}
 	addr := fmt.Sprintf("%s:%d", *iface, port)
 	listener, err := tls.Listen("tcp", addr, cfg)
 	if err != nil {
-		Logger.Error("failed to listen", "err", err)
-		return
+		log.Error("failed to listen", "err", err)
+		return nil
 	}
 
-	defer func(listener net.Listener) {
-		err := listener.Close()
-		if err != nil {
-			Logger.Error("failed to stop listening", "err", err)
-		}
-	}(listener)
-
-	Logger.Info("listening")
-
-	if enableMdns {
-		startAdvertisement(hostname, port)
-	}
+	log.Info("listening")
 
 	// if relaying, attempt to connect to target
 	var relayClient *Client
 	if relayHost != "" {
 		relayClient = NewClient(relayHost, relayPort, relayAuthChallenge, nil)
 		if relayClient == nil {
-			Logger.Error("failed to connect to target")
-			return
+			log.Error("failed to connect to target")
+			return nil
 		}
 	}
 
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			Logger.Error("server accept failed", "err", err)
-			break
-		}
-
-		if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
-			Logger.Info("accepted connection", "remote addr", conn.RemoteAddr())
-			go handleClient(conn, relayClient)
-		} else {
-			Logger.Debug("ignored connection", "remote addr", conn.RemoteAddr())
-			_ = conn.Close()
-		}
+	server := Server{
+		clientConnections: make([]*ClientConnection, 0),
+		listener:          listener,
+		log:               log,
+		wg:                wg,
 	}
+
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				log.Error("server accept failed", "err", err)
+				break
+			}
+
+			if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
+				log.Info("accepted connection", "remote addr", conn.RemoteAddr())
+				clientConnection := NewClientConnection(conn, relayClient)
+				server.clientConnections = append(server.clientConnections, clientConnection)
+			} else {
+				log.Debug("ignored connection", "remote addr", conn.RemoteAddr())
+				_ = conn.Close()
+			}
+		}
+	}()
+
+	return &server
+}
+
+func (server *Server) StopListening() {
+	err := server.listener.Close()
+	if err != nil {
+		server.log.Error("failed to stop listening", "err", err)
+	}
+
+	server.wg.Done()
 }

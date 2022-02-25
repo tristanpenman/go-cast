@@ -4,7 +4,9 @@ import (
 	"github.com/hashicorp/go-hclog"
 )
 
-var Logger = hclog.New(&hclog.LoggerOptions{
-	Name:  "go-cast",
-	Level: hclog.Info,
-})
+func NewLogger(name string) hclog.Logger {
+	return hclog.New(&hclog.LoggerOptions{
+		Name:  name,
+		Level: hclog.Info,
+	})
+}

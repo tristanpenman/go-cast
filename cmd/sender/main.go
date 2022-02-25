@@ -7,6 +7,8 @@ import (
 	. "github.com/tristanpenman/go-cast/internal"
 )
 
+var log = NewLogger("main")
+
 func main() {
 	var disableChallenge = flag.Bool("disable-challenge", false, "disable auth challenge")
 	var hostname = flag.String("hostname", "", "receiver address or hostname")
@@ -19,7 +21,7 @@ func main() {
 		return
 	}
 
-	Logger.Info("args",
+	log.Info("args",
 		"disable-challenge", *disableChallenge,
 		"hostname", *hostname,
 		"port", *port)

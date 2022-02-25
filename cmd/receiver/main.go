@@ -6,9 +6,42 @@ import (
 	"fmt"
 	"io/ioutil"
 	"strings"
+	"sync"
 
 	. "github.com/tristanpenman/go-cast/internal"
 )
+
+var log = NewLogger("main")
+
+func loadManifest(certManifest string, fixNewlines bool) map[string]string {
+	data, err := ioutil.ReadFile(certManifest)
+	if err != nil {
+		log.Error("failed to read certificate manifest file from disk", "err", err)
+		return nil
+	}
+
+	// convert new-line characters so that JSON parses correctly
+	var s = string(data)
+	if fixNewlines {
+		s = strings.ReplaceAll(s, "\n", "\\n")
+	}
+
+	var manifest map[string]string
+	err = json.Unmarshal([]byte(s), &manifest)
+	if err != nil {
+		log.Error("failed to parse certificate manifest file", "err", err)
+		return nil
+	}
+
+	if log.IsDebug() {
+		log.Debug("manifest contents")
+		for key, value := range manifest {
+			log.Debug(fmt.Sprintf("%s: %s", key, value))
+		}
+	}
+
+	return manifest
+}
 
 func main() {
 	var certManifest = flag.String("cert-manifest", "", "path to certificate manifest")
@@ -29,7 +62,7 @@ func main() {
 		return
 	}
 
-	Logger.Info("args",
+	log.Info("args",
 		"cert-manifest", *certManifest,
 		"client-prefix", *clientPrefix,
 		"enable-mdns", *enableMdns,
@@ -41,33 +74,19 @@ func main() {
 		"relay-port", *relayPort,
 		"relay-auth-challenge", *relayAuthChallenge)
 
-	// read manifest from disk
-	data, err := ioutil.ReadFile(*certManifest)
-	if err != nil {
-		Logger.Error("failed to read certificate manifest file from disk", "err", err)
+	manifest := loadManifest(*certManifest, *fixNewlines)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	server := NewServer(manifest, clientPrefix, iface, hostname, *port, *relayHost, *relayPort, *relayAuthChallenge, &wg)
+	if server == nil {
 		return
 	}
 
-	// convert new-line characters so that JSON parses correctly
-	var s = string(data)
-	if *fixNewlines {
-		s = strings.ReplaceAll(s, "\n", "\\n")
+	if *enableMdns {
+		StartAdvertisement(hostname, *port)
 	}
 
-	// parse manifest
-	var manifest map[string]string
-	err = json.Unmarshal([]byte(s), &manifest)
-	if err != nil {
-		Logger.Error("failed to parse certificate manifest file", "err", err)
-		return
-	}
-
-	if Logger.IsDebug() {
-		Logger.Debug("manifest contents")
-		for key, value := range manifest {
-			Logger.Debug(fmt.Sprintf("%s: %s", key, value))
-		}
-	}
-
-	StartServer(manifest, clientPrefix, *enableMdns, iface, hostname, *port, *relayHost, *relayPort, *relayAuthChallenge)
+	wg.Wait()
 }
