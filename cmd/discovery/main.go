@@ -1,11 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/hashicorp/mdns"
+
+	. "github.com/tristanpenman/go-cast/internal"
 )
+
+var log = NewLogger("main")
 
 func main() {
 	entries := make(chan *mdns.ServiceEntry, 4)
@@ -13,7 +16,7 @@ func main() {
 
 	go func() {
 		for entry := range entries {
-			fmt.Printf("got new entry: %s %s %d %v\n", entry.Name, entry.AddrV4, entry.Port, entry.InfoFields)
+			log.Info("got new entry", "name", entry.Name, "addr", entry.AddrV4, "port", entry.Port, "info", entry.InfoFields)
 		}
 	}()
 
@@ -24,6 +27,6 @@ func main() {
 
 	err := mdns.Query(params)
 	if err != nil {
-		fmt.Printf("error performing mdns lookup: %s", err)
+		log.Error("error performing mdns lookup", "err", err)
 	}
 }

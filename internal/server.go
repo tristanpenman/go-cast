@@ -3,10 +3,11 @@ package internal
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/hashicorp/go-hclog"
 	"net"
 	"strings"
 	"sync"
+
+	"github.com/hashicorp/go-hclog"
 )
 
 type Server struct {

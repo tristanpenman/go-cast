@@ -85,7 +85,10 @@ func main() {
 	}
 
 	if *enableMdns {
-		StartAdvertisement(hostname, *port)
+		advertisement := NewAdvertisement(hostname, *port)
+		if advertisement == nil {
+			log.Error("failed to advertise receiver")
+		}
 	}
 
 	wg.Wait()

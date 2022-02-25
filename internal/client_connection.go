@@ -1,10 +1,12 @@
 package internal
 
 import (
+	"net"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/go-hclog"
+
 	"github.com/tristanpenman/go-cast/internal/cast"
-	"net"
 )
 
 type ClientConnection struct {
