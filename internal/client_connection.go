@@ -54,11 +54,6 @@ func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.Ca
 func NewClientConnection(conn net.Conn, relayClient *Client) *ClientConnection {
 	var log = NewLogger("client-connection")
 
-	defer func() {
-		_ = conn.Close()
-		log.Info("connection closed")
-	}()
-
 	castChannel := cast.CreateCastChannel(conn, log)
 
 	clientConnection := ClientConnection{
@@ -69,6 +64,11 @@ func NewClientConnection(conn net.Conn, relayClient *Client) *ClientConnection {
 	}
 
 	go func() {
+		defer func() {
+			_ = conn.Close()
+			log.Info("connection closed")
+		}()
+
 		for {
 			select {
 			case castMessage, ok := <-castChannel.Messages:
