@@ -10,7 +10,9 @@ import (
 
 var log = NewLogger("main")
 
-func main() {
+func query() {
+	log.Info("query...")
+
 	entries := make(chan *mdns.ServiceEntry, 4)
 	defer close(entries)
 
@@ -28,5 +30,11 @@ func main() {
 	err := mdns.Query(params)
 	if err != nil {
 		log.Error("error performing mdns lookup", "err", err)
+	}
+}
+
+func main() {
+	for {
+		query()
 	}
 }
