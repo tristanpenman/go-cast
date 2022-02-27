@@ -20,8 +20,21 @@ func NewAdvertisement(hostname *string, port int) *Advertisement {
 		*hostname, _ = os.Hostname()
 	}
 
-	info := []string{"test"}
-	service, err := mdns.NewMDNSService("go-cast", "_googlecast._tcp", "", *hostname, port, nil, info)
+	info := []string{
+		"cd=",
+		"rm=",
+		"ve=2",
+		"st=0",
+		"rs=",
+		"nf=1",
+		"md=Vivi",
+		"id=a98a257b4a3dd84392a34bd0",
+		"ic=/setup/icon.png",
+		"fn=Test",
+		"ca=4101",
+	}
+
+	service, err := mdns.NewMDNSService("test", "_googlecast._tcp", "", "", port, nil, info)
 	if err != nil {
 		log.Error("failed to create mdns service", "err", err)
 		return nil
