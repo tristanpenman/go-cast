@@ -1,11 +1,11 @@
 # Plan
 
 - Receiver
-  + Implement enough receiver functionality to advertise an app
+  + ~~Implement enough receiver functionality to advertise an app~~
   + Forward video content to ffmpeg or mpv
   - Relay functionality
-    + Add relay mode command line argument
-    + Connect to a remote host when a connection is received
+    + ~~Add relay mode command line argument~~
+    + ~~Connect to a remote host when a connection is received~~
     + Perform device authentication
     + Forward messages from client to remote host
     + Forward messages from remote host to client

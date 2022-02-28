@@ -73,7 +73,7 @@ func NewServer(
 
 			if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
 				log.Info("accepted connection", "remote addr", conn.RemoteAddr())
-				clientConnection := NewClientConnection(conn, relayClient)
+				clientConnection := NewClientConnection(conn, manifest, relayClient)
 				server.clientConnections = append(server.clientConnections, clientConnection)
 			} else {
 				log.Debug("ignored connection", "remote addr", conn.RemoteAddr())

@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"encoding/base64"
+	"encoding/pem"
 	"net"
 
 	"github.com/golang/protobuf/proto"
@@ -16,9 +18,28 @@ type ClientConnection struct {
 	relayClient *Client
 }
 
-func (clientConnection *ClientConnection) sendDeviceAuthResponse() bool {
+func (clientConnection *ClientConnection) sendDeviceAuthResponse(manifest map[string]string) bool {
+	// intermediate and platform certs are in PEM format
+	// TODO: check that we don't have any remaining data in `rest`
+	ica, _ := pem.Decode([]byte(manifest["ica"]))
+	platform, _ := pem.Decode([]byte(manifest["cpu"]))
+
+	// Signature is just base64
+	sig, _ := base64.StdEncoding.DecodeString(manifest["sig"])
+
+	// TODO: is there a tidier way to do this?
+	intermediateCertificate := make([][]byte, 1)
+	intermediateCertificate[0] = ica.Bytes
+
+	hashAlgorithm := cast.HashAlgorithm_SHA256
+
 	payloadBytes, err := proto.Marshal(&cast.DeviceAuthMessage{
-		Response: &cast.AuthResponse{},
+		Response: &cast.AuthResponse{
+			Signature:               sig,
+			ClientAuthCertificate:   platform.Bytes,
+			IntermediateCertificate: intermediateCertificate,
+			HashAlgorithm:           &hashAlgorithm,
+		},
 	})
 
 	if err != nil {
@@ -27,11 +48,19 @@ func (clientConnection *ClientConnection) sendDeviceAuthResponse() bool {
 	}
 
 	payloadType := cast.CastMessage_BINARY
+	protocolVersion := cast.CastMessage_CASTV2_1_0
+	destinationId := "sender-0"
+	sourceId := "receiver-0"
 	message := cast.CastMessage{
-		Namespace:     &cast.DeviceAuthNamespace,
-		PayloadBinary: payloadBytes,
-		PayloadType:   &payloadType,
+		DestinationId:   &destinationId,
+		Namespace:       &cast.DeviceAuthNamespace,
+		PayloadBinary:   payloadBytes,
+		PayloadType:     &payloadType,
+		ProtocolVersion: &protocolVersion,
+		SourceId:        &sourceId,
 	}
+
+	clientConnection.log.Info("sending device auth response", "message", message.String())
 
 	return clientConnection.castChannel.Send(&message)
 }
@@ -51,7 +80,7 @@ func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.Ca
 	}
 }
 
-func NewClientConnection(conn net.Conn, relayClient *Client) *ClientConnection {
+func NewClientConnection(conn net.Conn, manifest map[string]string, relayClient *Client) *ClientConnection {
 	var log = NewLogger("client-connection")
 
 	castChannel := cast.CreateCastChannel(conn, log)
@@ -75,7 +104,7 @@ func NewClientConnection(conn net.Conn, relayClient *Client) *ClientConnection {
 				if castMessage != nil {
 					log.Info("received", "message", castMessage)
 					if *castMessage.Namespace == cast.DeviceAuthNamespace {
-						clientConnection.sendDeviceAuthResponse()
+						clientConnection.sendDeviceAuthResponse(manifest)
 					} else if relayClient != nil {
 						clientConnection.relayCastMessage(castMessage)
 					} else {
