@@ -13,9 +13,10 @@ import (
 )
 
 type Client struct {
-	conn        net.Conn
 	castChannel cast.CastChannel
+	conn        net.Conn
 	log         hclog.Logger
+	Incoming    chan *cast.CastMessage
 }
 
 func (client *Client) sendDeviceAuthChallenge() bool {
@@ -57,12 +58,15 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 		return nil
 	}
 
+	log.Info("Connected")
+
 	castChannel := cast.CreateCastChannel(conn, log)
 
 	client := Client{
 		castChannel: castChannel,
 		conn:        conn,
 		log:         log,
+		Incoming:    make(chan *cast.CastMessage),
 	}
 
 	if authChallenge {
@@ -73,14 +77,17 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 		for {
 			select {
 			case castMessage, ok := <-castChannel.Messages:
-				if castMessage != nil {
-					if log.IsDebug() {
-						log.Debug("received message", "content", castMessage)
-					} else {
-						log.Info("received message", "namespace", *castMessage.Namespace)
+				if ok {
+					if castMessage != nil {
+						if log.IsDebug() {
+							log.Debug("received message", "content", castMessage)
+						} else {
+							log.Info("received message", "namespace", *castMessage.Namespace)
+						}
 					}
-				}
-				if !ok {
+
+					client.Incoming <- castMessage
+				} else {
 					log.Info("channel closed")
 					_ = conn.Close()
 					if wg != nil {

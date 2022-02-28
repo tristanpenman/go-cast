@@ -60,13 +60,19 @@ func (clientConnection *ClientConnection) sendDeviceAuthResponse(manifest map[st
 		SourceId:        &sourceId,
 	}
 
-	clientConnection.log.Info("sending device auth response", "message", message.String())
+	if clientConnection.log.IsDebug() {
+		clientConnection.log.Debug("sending device auth response", "message", message.String())
+	} else {
+		clientConnection.log.Info("sending device auth response")
+	}
 
 	return clientConnection.castChannel.Send(&message)
 }
 
 func (clientConnection *ClientConnection) relayCastMessage(castMessage *cast.CastMessage) {
 	clientConnection.log.Info("relay cast message")
+
+	clientConnection.relayClient.SendMessage(castMessage)
 }
 
 func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.CastMessage) {
@@ -118,6 +124,15 @@ func NewClientConnection(conn net.Conn, manifest map[string]string, relayClient 
 			}
 		}
 	}()
+
+	if relayClient != nil {
+		go func() {
+			select {
+			case castMessage := <-relayClient.Incoming:
+				clientConnection.castChannel.Send(castMessage)
+			}
+		}()
+	}
 
 	return &clientConnection
 }
