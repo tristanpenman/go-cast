@@ -81,6 +81,9 @@ func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.Ca
 	case heartbeatNamespace:
 		clientConnection.handleHeartbeatMessage(*castMessage.PayloadUtf8)
 		break
+	case receiverNamespace:
+		clientConnection.handleReceiverMessage(*castMessage.PayloadUtf8)
+		break
 	default:
 		clientConnection.log.Info("unhandled message", "namespace", *castMessage.Namespace)
 	}
@@ -110,8 +113,10 @@ func NewClientConnection(conn net.Conn, manifest map[string]string, relayClient 
 				if castMessage != nil {
 					log.Info("received", "message", castMessage)
 					if *castMessage.Namespace == cast.DeviceAuthNamespace {
+						// device authentication is always handled locally
 						clientConnection.sendDeviceAuthResponse(manifest)
 					} else if relayClient != nil {
+						// all other messages are relayed when in relay mode
 						clientConnection.relayCastMessage(castMessage)
 					} else {
 						clientConnection.handleCastMessage(castMessage)
