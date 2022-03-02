@@ -8,13 +8,17 @@ import (
 	"github.com/tristanpenman/go-cast/internal/cast"
 )
 
+type Application struct {
+}
+
 type ClientConnection struct {
-	castChannel cast.CastChannel
-	conn        net.Conn
-	log         hclog.Logger
-	receiverId  string
-	relayClient *Client
-	senderId    string
+	applications []Application
+	castChannel  cast.CastChannel
+	conn         net.Conn
+	log          hclog.Logger
+	receiverId   string
+	relayClient  *Client
+	senderId     string
 }
 
 func (clientConnection *ClientConnection) sendUtf8Message(payload []byte, namespace string) {
@@ -37,8 +41,6 @@ func (clientConnection *ClientConnection) sendUtf8Message(payload []byte, namesp
 }
 
 func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.CastMessage) {
-	clientConnection.log.Info("handle cast message")
-
 	// only handle connect messages if not already connected
 	if clientConnection.receiverId == "0" && clientConnection.senderId == "0" {
 		if *castMessage.Namespace == connectNamespace {
@@ -81,12 +83,13 @@ func NewClientConnection(conn net.Conn, manifest map[string]string, relayClient 
 	castChannel := cast.CreateCastChannel(conn, log)
 
 	clientConnection := ClientConnection{
-		castChannel: castChannel,
-		conn:        conn,
-		log:         log,
-		receiverId:  "0",
-		relayClient: relayClient,
-		senderId:    "0",
+		applications: make([]Application, 0),
+		castChannel:  castChannel,
+		conn:         conn,
+		log:          log,
+		receiverId:   "0",
+		relayClient:  relayClient,
+		senderId:     "0",
 	}
 
 	go func() {
