@@ -12,10 +12,15 @@ type ReceiverMessage struct {
 }
 
 type getAppAvailabilityRequest struct {
+	*ReceiverMessage
+
 	AppId []string `json:"appId"`
 }
 
 type getAppAvailabilityResponse struct {
+	*ReceiverMessage
+
+	Availability map[string]string `json:"availability"`
 }
 
 func (clientConnection *ClientConnection) handleGetAppAvailability(data string) {
@@ -25,10 +30,27 @@ func (clientConnection *ClientConnection) handleGetAppAvailability(data string) 
 		clientConnection.log.Error("failed to connect data", "err", err)
 		return
 	}
-}
 
-type getStatusRequest struct {
-	*ReceiverMessage
+	availability := make(map[string]string)
+	for _, appId := range request.AppId {
+		availability[appId] = "APP_UNAVAILABLE"
+	}
+
+	response := getAppAvailabilityResponse{
+		Availability: availability,
+		ReceiverMessage: &ReceiverMessage{
+			RequestId: request.RequestId,
+			Type:      request.Type,
+		},
+	}
+
+	bytes, err := json.Marshal(response)
+	if err != nil {
+		clientConnection.log.Error("failed to marshall response for GET_APP_AVAILABILITY message")
+		return
+	}
+
+	clientConnection.sendUtf8Message(bytes, receiverNamespace)
 }
 
 type volume struct {

@@ -18,5 +18,5 @@ func (clientConnection *ClientConnection) handleConnectMessage(data string) {
 		return
 	}
 
-	clientConnection.log.Info("connect", "data", data)
+	// TODO: store connection data
 }
