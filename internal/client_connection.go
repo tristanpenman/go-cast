@@ -9,7 +9,20 @@ import (
 	"github.com/tristanpenman/go-cast/internal/cast"
 )
 
+const debugNamespace = "urn:x-cast:com.google.cast.debug"
+const remotingNamespace = "urn:x-cast:com.google.cast.remoting"
+
+type Namespace struct {
+	Name string `json:"name"`
+}
+
 type Application struct {
+	AppId       string      `json:"appId"`
+	DisplayName string      `json:"displayName"`
+	Namespaces  []Namespace `json:"namespaces"`
+	SessionId   string      `json:"sessionId"`
+	StatusText  string      `json:"statusText"`
+	TransportId string      `json:"transportId"`
 }
 
 type ClientConnection struct {
@@ -20,6 +33,25 @@ type ClientConnection struct {
 	receiverId   string
 	relayClient  *Client
 	senderId     string
+}
+
+func defaultApplications() []Application {
+	namespaces := make([]Namespace, 3)
+	namespaces[0] = Namespace{Name: receiverNamespace}
+	namespaces[1] = Namespace{Name: debugNamespace}
+	namespaces[2] = Namespace{Name: remotingNamespace}
+
+	applications := make([]Application, 1)
+	applications[0] = Application{
+		AppId:       "E8C28D3C",
+		DisplayName: "Backdrop",
+		Namespaces:  namespaces,
+		SessionId:   "AD3DFC60-A6AE-4532-87AF-18504DA22607",
+		StatusText:  "",
+		TransportId: "pid-22607",
+	}
+
+	return applications
 }
 
 func (clientConnection *ClientConnection) sendUtf8Message(payload []byte, namespace string) {
@@ -84,7 +116,7 @@ func NewClientConnection(conn net.Conn, id string, manifest map[string]string, r
 	castChannel := cast.CreateCastChannel(conn, log)
 
 	clientConnection := ClientConnection{
-		applications: make([]Application, 0),
+		applications: defaultApplications(),
 		castChannel:  castChannel,
 		conn:         conn,
 		log:          log,

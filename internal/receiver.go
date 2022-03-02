@@ -6,6 +6,10 @@ import (
 
 const receiverNamespace = "urn:x-cast:com.google.cast.receiver"
 
+const androidMirroringAppId = "674A0243"
+
+const chromeMirroringAppId = "0F5096E8"
+
 type ReceiverMessage struct {
 	RequestId int    `json:"requestId"`
 	Type      string `json:"type"`
@@ -33,7 +37,11 @@ func (clientConnection *ClientConnection) handleGetAppAvailability(data string) 
 
 	availability := make(map[string]string)
 	for _, appId := range request.AppId {
-		availability[appId] = "APP_UNAVAILABLE"
+		if appId == androidMirroringAppId || appId == chromeMirroringAppId {
+			availability[appId] = "APP_AVAILABLE"
+		} else {
+			availability[appId] = "APP_UNAVAILABLE"
+		}
 	}
 
 	response := getAppAvailabilityResponse{
