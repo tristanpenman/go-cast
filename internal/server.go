@@ -14,6 +14,7 @@ type Server struct {
 	clientConnections []*ClientConnection
 	listener          net.Listener
 	log               hclog.Logger
+	nextClientId      int
 	wg                *sync.WaitGroup
 }
 
@@ -60,6 +61,7 @@ func NewServer(
 		clientConnections: make([]*ClientConnection, 0),
 		listener:          listener,
 		log:               log,
+		nextClientId:      0,
 		wg:                wg,
 	}
 
@@ -73,7 +75,9 @@ func NewServer(
 
 			if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
 				log.Info("accepted connection", "remote addr", conn.RemoteAddr())
-				clientConnection := NewClientConnection(conn, manifest, relayClient)
+				id := server.nextClientId
+				clientConnection := NewClientConnection(conn, fmt.Sprintf("%d", id), manifest, relayClient)
+				server.nextClientId++
 				server.clientConnections = append(server.clientConnections, clientConnection)
 			} else {
 				log.Debug("ignored connection", "remote addr", conn.RemoteAddr())

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/hashicorp/go-hclog"
@@ -77,8 +78,8 @@ func (clientConnection *ClientConnection) relayCastMessage(castMessage *cast.Cas
 	clientConnection.relayClient.SendMessage(castMessage)
 }
 
-func NewClientConnection(conn net.Conn, manifest map[string]string, relayClient *Client) *ClientConnection {
-	var log = NewLogger("client-connection")
+func NewClientConnection(conn net.Conn, id string, manifest map[string]string, relayClient *Client) *ClientConnection {
+	var log = NewLogger(fmt.Sprintf("client-connection (%s)", id))
 
 	castChannel := cast.CreateCastChannel(conn, log)
 
