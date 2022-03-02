@@ -12,18 +12,36 @@ type ClientConnection struct {
 	castChannel cast.CastChannel
 	conn        net.Conn
 	log         hclog.Logger
+	receiverId  string
 	relayClient *Client
+	senderId    string
 }
 
 func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.CastMessage) {
 	clientConnection.log.Info("handle cast message")
+
+	// only handle connect messages if not already connected
+	if clientConnection.receiverId == "0" && clientConnection.senderId == "0" {
+		if *castMessage.Namespace == connectNamespace {
+			clientConnection.handleConnectMessage(*castMessage.PayloadUtf8)
+			clientConnection.senderId = *castMessage.SourceId
+			clientConnection.receiverId = *castMessage.DestinationId
+		} else {
+			clientConnection.log.Error("not connected; ignoring message", "namespace", *castMessage.Namespace)
+		}
+		return
+	}
+
 	switch *castMessage.Namespace {
+	case connectNamespace:
+		clientConnection.log.Error("already connected; ignoring connection message")
+		return
 	case heartbeatNamespace:
 		clientConnection.handleHeartbeatMessage(*castMessage.PayloadUtf8)
-		break
+		return
 	case receiverNamespace:
 		clientConnection.handleReceiverMessage(*castMessage.PayloadUtf8)
-		break
+		return
 	default:
 		clientConnection.log.Info("unhandled message", "namespace", *castMessage.Namespace)
 	}
@@ -44,7 +62,9 @@ func NewClientConnection(conn net.Conn, manifest map[string]string, relayClient 
 		castChannel: castChannel,
 		conn:        conn,
 		log:         log,
+		receiverId:  "0",
 		relayClient: relayClient,
+		senderId:    "0",
 	}
 
 	go func() {
@@ -56,21 +76,22 @@ func NewClientConnection(conn net.Conn, manifest map[string]string, relayClient 
 		for {
 			select {
 			case castMessage, ok := <-castChannel.Messages:
+				if !ok {
+					log.Info("channel closed")
+					return
+				}
+
 				if castMessage != nil {
 					log.Info("received", "message", castMessage)
 					if *castMessage.Namespace == cast.DeviceAuthNamespace {
 						// device authentication is always handled locally
 						clientConnection.handleDeviceAuthChallenge(manifest)
-					} else if relayClient != nil {
+					} else if relayClient == nil {
+						clientConnection.handleCastMessage(castMessage)
+					} else {
 						// all other messages are relayed when in relay mode
 						clientConnection.relayCastMessage(castMessage)
-					} else {
-						clientConnection.handleCastMessage(castMessage)
 					}
-				}
-				if !ok {
-					log.Info("channel closed")
-					return
 				}
 			}
 		}
