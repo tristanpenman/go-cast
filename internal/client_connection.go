@@ -17,6 +17,25 @@ type ClientConnection struct {
 	senderId    string
 }
 
+func (clientConnection *ClientConnection) sendUtf8Message(payload []byte, namespace string) {
+	payloadType := cast.CastMessage_STRING
+	payloadUtf8 := string(payload)
+	protocolVersion := cast.CastMessage_CASTV2_1_0
+
+	castMessage := cast.CastMessage{
+		DestinationId:   &clientConnection.senderId,
+		Namespace:       &namespace,
+		PayloadUtf8:     &payloadUtf8,
+		PayloadType:     &payloadType,
+		ProtocolVersion: &protocolVersion,
+		SourceId:        &clientConnection.receiverId,
+	}
+
+	clientConnection.log.Info("sending", "castMessage", castMessage.String())
+
+	clientConnection.castChannel.Send(&castMessage)
+}
+
 func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.CastMessage) {
 	clientConnection.log.Info("handle cast message")
 
@@ -37,7 +56,10 @@ func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.Ca
 		clientConnection.log.Error("already connected; ignoring connection message")
 		return
 	case heartbeatNamespace:
-		clientConnection.handleHeartbeatMessage(*castMessage.PayloadUtf8)
+		responsePayload := clientConnection.handleHeartbeatMessage(*castMessage.PayloadUtf8)
+		if responsePayload != nil {
+			clientConnection.sendUtf8Message(responsePayload, heartbeatNamespace)
+		}
 		return
 	case receiverNamespace:
 		clientConnection.handleReceiverMessage(*castMessage.PayloadUtf8)
