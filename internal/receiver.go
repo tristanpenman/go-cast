@@ -104,13 +104,24 @@ func (clientConnection *ClientConnection) handleGetStatus(requestId int) {
 }
 
 type launchRequest struct {
+	*ReceiverMessage
+
+	AppId string `json:"appId"`
 }
 
-type launchResponse struct {
-}
+func (clientConnection *ClientConnection) handleLaunch(data string) {
+	var request launchRequest
+	err := json.Unmarshal([]byte(data), &request)
+	if err != nil {
+		clientConnection.log.Error("failed to unmarshall launch data", "err", err)
+		return
+	}
 
-func (clientConnection *ClientConnection) handleLaunch() {
-
+	if clientConnection.startApplication(request.AppId) {
+		clientConnection.handleGetStatus(request.RequestId)
+	} else {
+		// TODO: How to handle application not being started?
+	}
 }
 
 type stopRequest struct {
@@ -139,7 +150,7 @@ func (clientConnection *ClientConnection) handleReceiverMessage(data string) {
 		clientConnection.handleGetStatus(parsed.RequestId)
 		break
 	case "LAUNCH":
-		clientConnection.handleLaunch()
+		clientConnection.handleLaunch(data)
 		break
 	case "STOP":
 		clientConnection.handleStop()

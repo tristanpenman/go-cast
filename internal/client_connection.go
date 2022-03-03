@@ -10,6 +10,7 @@ import (
 )
 
 const debugNamespace = "urn:x-cast:com.google.cast.debug"
+const mediaNamespace = "urn:x-cast:com.google.cast.media"
 const remotingNamespace = "urn:x-cast:com.google.cast.remoting"
 
 type Namespace struct {
@@ -52,6 +53,50 @@ func defaultApplications() []Application {
 	}
 
 	return applications
+}
+
+func (clientConnection *ClientConnection) startApplication(appId string) bool {
+	for _, application := range clientConnection.applications {
+		if application.AppId == appId {
+			clientConnection.log.Warn("application already started", "appId", appId)
+			return true
+		}
+	}
+
+	namespaces := make([]Namespace, 2)
+	namespaces[0] = Namespace{Name: receiverNamespace}
+	namespaces[1] = Namespace{Name: debugNamespace}
+
+	var application Application
+	switch appId {
+	case androidMirroringAppId:
+		application = Application{
+			AppId:       appId,
+			DisplayName: "Android Mirroring",
+			Namespaces:  namespaces,
+			SessionId:   "835ff891-f76f-4a04-8618-a5dc95477075",
+			StatusText:  "",
+			TransportId: "web-5",
+		}
+		break
+	case chromeMirroringAppId:
+		application = Application{
+			AppId:       appId,
+			DisplayName: "Chrome Mirroring",
+			Namespaces:  namespaces,
+			SessionId:   "7E2FF513-CDF6-9A91-2B28-3E3DE7BAC174",
+			StatusText:  "",
+			TransportId: "web-5",
+		}
+		break
+	default:
+		clientConnection.log.Error("Unsupported app", "appId", appId)
+		return false
+	}
+
+	clientConnection.applications = append(clientConnection.applications, application)
+
+	return true
 }
 
 func (clientConnection *ClientConnection) sendUtf8Message(payload []byte, namespace string) {

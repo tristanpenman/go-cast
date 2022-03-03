@@ -6,7 +6,8 @@ import (
 
 func NewLogger(name string) hclog.Logger {
 	return hclog.New(&hclog.LoggerOptions{
-		Name:  name,
+		Color: hclog.AutoColor,
 		Level: hclog.Info,
+		Name:  name,
 	})
 }
