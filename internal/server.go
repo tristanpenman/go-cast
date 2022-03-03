@@ -19,6 +19,7 @@ type Server struct {
 }
 
 func NewServer(
+	device Device,
 	manifest map[string]string,
 	clientPrefix *string,
 	iface *string,
@@ -76,7 +77,7 @@ func NewServer(
 			if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
 				log.Info("accepted connection", "remote addr", conn.RemoteAddr())
 				id := server.nextClientId
-				clientConnection := NewClientConnection(conn, fmt.Sprintf("%d", id), manifest, relayClient)
+				clientConnection := NewClientConnection(device, conn, id, manifest, relayClient)
 				server.nextClientId++
 				server.clientConnections = append(server.clientConnections, clientConnection)
 			} else {

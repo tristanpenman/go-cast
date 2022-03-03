@@ -33,6 +33,7 @@ type ClientConnection struct {
 	applications []Application
 	castChannel  cast.CastChannel
 	conn         net.Conn
+	device       Device
 	log          hclog.Logger
 	receiverId   string
 	relayClient  *Client
@@ -164,8 +165,8 @@ func (clientConnection *ClientConnection) relayCastMessage(castMessage *cast.Cas
 	clientConnection.relayClient.SendMessage(castMessage)
 }
 
-func NewClientConnection(conn net.Conn, id string, manifest map[string]string, relayClient *Client) *ClientConnection {
-	var log = NewLogger(fmt.Sprintf("client-connection (%s)", id))
+func NewClientConnection(device Device, conn net.Conn, id int, manifest map[string]string, relayClient *Client) *ClientConnection {
+	var log = NewLogger(fmt.Sprintf("client-connection (%d)", id))
 
 	castChannel := cast.CreateCastChannel(conn, log)
 
@@ -173,6 +174,7 @@ func NewClientConnection(conn net.Conn, id string, manifest map[string]string, r
 		applications: defaultApplications(),
 		castChannel:  castChannel,
 		conn:         conn,
+		device:       device,
 		log:          log,
 		receiverId:   "0",
 		relayClient:  relayClient,

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/hashicorp/go-hclog"
@@ -8,11 +9,12 @@ import (
 )
 
 type Advertisement struct {
+	device Device
 	log    hclog.Logger
 	server *mdns.Server
 }
 
-func NewAdvertisement(hostname *string, port int) *Advertisement {
+func NewAdvertisement(device Device, hostname *string, port int) *Advertisement {
 	var log = NewLogger("advertisement")
 
 	log.Info("starting mdns...")
@@ -27,14 +29,14 @@ func NewAdvertisement(hostname *string, port int) *Advertisement {
 		"st=0",
 		"rs=",
 		"nf=1",
-		"md=go-cast",
-		"id=a98a257b4a3dd84392a34bd0",
 		"ic=/setup/icon.png",
-		"fn=go-cast",
 		"ca=4101",
+		fmt.Sprintf("md=%s", device.DeviceModel),
+		fmt.Sprintf("id=%s", device.Id),
+		fmt.Sprintf("fn=%s", device.FriendlyName),
 	}
 
-	service, err := mdns.NewMDNSService("test", "_googlecast._tcp", "", "", port, nil, info)
+	service, err := mdns.NewMDNSService(device.Id, "_googlecast._tcp", "", "", port, nil, info)
 	if err != nil {
 		log.Error("failed to create mdns service", "err", err)
 		return nil
