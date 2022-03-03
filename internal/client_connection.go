@@ -11,6 +11,7 @@ import (
 
 const debugNamespace = "urn:x-cast:com.google.cast.debug"
 const deviceAuthNamespace = "urn:x-cast:com.google.cast.tp.deviceauth"
+const heartbeatNamespace = "urn:x-cast:com.google.cast.tp.heartbeat"
 const mediaNamespace = "urn:x-cast:com.google.cast.media"
 const receiverNamespace = "urn:x-cast:com.google.cast.receiver"
 const remotingNamespace = "urn:x-cast:com.google.cast.remoting"
@@ -148,10 +149,15 @@ func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.Ca
 	case receiverNamespace:
 		clientConnection.handleReceiverMessage(*castMessage.PayloadUtf8)
 		return
+	case setupNamespace:
+		responsePayload := clientConnection.handleSetupMessage(*castMessage.PayloadUtf8)
+		if responsePayload != nil {
+			clientConnection.sendUtf8Message(responsePayload, setupNamespace)
+		}
+		return
 	// unsupported namespaces
 	case debugNamespace:
 	case mediaNamespace:
-	case setupNamespace:
 		clientConnection.log.Warn("received message for known but unsupported namespace", "namespace", *castMessage.Namespace)
 		break
 	default:

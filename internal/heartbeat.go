@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 )
 
-const heartbeatNamespace = "urn:x-cast:com.google.cast.tp.heartbeat"
-
 type heartbeatMessage struct {
 	Type string `json:"type"`
 }
