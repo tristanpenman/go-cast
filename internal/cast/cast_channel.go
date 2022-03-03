@@ -9,8 +9,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 )
 
-var DeviceAuthNamespace = "urn:x-cast:com.google.cast.tp.deviceauth"
-
 type CastChannel struct {
 	conn     net.Conn
 	logger   hclog.Logger
@@ -21,10 +19,8 @@ func CreateCastChannel(conn net.Conn, logger hclog.Logger) CastChannel {
 	messages := make(chan *CastMessage)
 
 	go func() {
-		lenBytes := make([]byte, 4)
-		msgBytes := make([]byte, 4096)
-
 		for {
+			lenBytes := make([]byte, 4)
 			n, err := conn.Read(lenBytes)
 			if err != nil {
 				logger.Error("failed to read length", "err", err)
@@ -36,15 +32,21 @@ func CreateCastChannel(conn net.Conn, logger hclog.Logger) CastChannel {
 				break
 			}
 
+			lenInt := binary.BigEndian.Uint32(lenBytes)
 			if logger.IsDebug() {
-				lenInt := binary.BigEndian.Uint32(lenBytes)
 				logger.Debug(fmt.Sprintf("Message length: %d", lenInt))
 			}
 
 			// TODO: Make this handle split header and body packets properly
+			msgBytes := make([]byte, lenInt)
 			n, err = conn.Read(msgBytes)
 			if err != nil {
 				logger.Error("failed to read message", "err", err)
+				break
+			}
+
+			if uint32(n) != lenInt {
+				logger.Error("read unexpected number of bytes", "expected", lenInt, "actual", n)
 				break
 			}
 

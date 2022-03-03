@@ -38,13 +38,14 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(manifest map
 		return false
 	}
 
+	namespace := deviceAuthNamespace
 	payloadType := cast.CastMessage_BINARY
 	protocolVersion := cast.CastMessage_CASTV2_1_0
 	destinationId := "sender-0"
 	sourceId := "receiver-0"
 	message := cast.CastMessage{
 		DestinationId:   &destinationId,
-		Namespace:       &cast.DeviceAuthNamespace,
+		Namespace:       &namespace,
 		PayloadBinary:   payloadBytes,
 		PayloadType:     &payloadType,
 		ProtocolVersion: &protocolVersion,
@@ -70,13 +71,14 @@ func (client *Client) sendDeviceAuthChallenge() bool {
 		return false
 	}
 
+	namespace := deviceAuthNamespace
 	payloadType := cast.CastMessage_BINARY
 	protocolVersion := cast.CastMessage_CASTV2_1_0
 	sourceId := "sender-0"
 	destinationId := "receiver-0"
 	message := cast.CastMessage{
 		DestinationId:   &destinationId,
-		Namespace:       &cast.DeviceAuthNamespace,
+		Namespace:       &namespace,
 		PayloadBinary:   payloadBytes,
 		PayloadType:     &payloadType,
 		ProtocolVersion: &protocolVersion,

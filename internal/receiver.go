@@ -4,10 +4,7 @@ import (
 	"encoding/json"
 )
 
-const receiverNamespace = "urn:x-cast:com.google.cast.receiver"
-
 const androidMirroringAppId = "674A0243"
-
 const chromeMirroringAppId = "0F5096E8"
 
 type ReceiverMessage struct {

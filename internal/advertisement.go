@@ -27,10 +27,10 @@ func NewAdvertisement(hostname *string, port int) *Advertisement {
 		"st=0",
 		"rs=",
 		"nf=1",
-		"md=Vivi",
+		"md=go-cast",
 		"id=a98a257b4a3dd84392a34bd0",
 		"ic=/setup/icon.png",
-		"fn=Test",
+		"fn=go-cast",
 		"ca=4101",
 	}
 
