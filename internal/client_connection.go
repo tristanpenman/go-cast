@@ -9,6 +9,10 @@ import (
 	"github.com/tristanpenman/go-cast/internal/cast"
 )
 
+const androidMirroringAppId = "674A0243"
+const backdropAppId = "E8C28D3C"
+const chromeMirroringAppId = "0F5096E8"
+
 const debugNamespace = "urn:x-cast:com.google.cast.debug"
 const deviceAuthNamespace = "urn:x-cast:com.google.cast.tp.deviceauth"
 const heartbeatNamespace = "urn:x-cast:com.google.cast.tp.heartbeat"
@@ -31,34 +35,17 @@ type Application struct {
 }
 
 type ClientConnection struct {
-	applications []Application
-	castChannel  cast.CastChannel
-	conn         net.Conn
-	device       Device
-	log          hclog.Logger
-	mirrors      map[string]*Mirror
-	receiverId   string
-	relayClient  *Client
-	senderId     string
-}
-
-func defaultApplications() []Application {
-	namespaces := make([]Namespace, 3)
-	namespaces[0] = Namespace{Name: receiverNamespace}
-	namespaces[1] = Namespace{Name: debugNamespace}
-	namespaces[2] = Namespace{Name: remotingNamespace}
-
-	applications := make([]Application, 1)
-	applications[0] = Application{
-		AppId:       "E8C28D3C",
-		DisplayName: "Backdrop",
-		Namespaces:  namespaces,
-		SessionId:   "AD3DFC60-A6AE-4532-87AF-18504DA22607",
-		StatusText:  "",
-		TransportId: "pid-22607",
-	}
-
-	return applications
+	applications  map[string]*Application
+	availableApps []string
+	castChannel   cast.CastChannel
+	conn          net.Conn
+	device        Device
+	id            int
+	log           hclog.Logger
+	receiverId    string
+	relayClient   *Client
+	senderId      string
+	sessions      map[string]*Session
 }
 
 func (clientConnection *ClientConnection) startApplication(appId string) bool {
@@ -101,9 +88,9 @@ func (clientConnection *ClientConnection) startApplication(appId string) bool {
 	}
 
 	// create new mirroring session
-	mirror := NewMirror()
-	clientConnection.mirrors[application.SessionId] = mirror
-	clientConnection.applications = append(clientConnection.applications, application)
+	session := NewSession(application.SessionId)
+	clientConnection.sessions[application.SessionId] = session
+	clientConnection.applications[application.SessionId] = &application
 
 	return true
 }
@@ -180,16 +167,41 @@ func NewClientConnection(device Device, conn net.Conn, id int, manifest map[stri
 
 	castChannel := cast.CreateCastChannel(conn, log)
 
+	// Namespaces covered by the Backdrop appllication
+	namespaces := make([]Namespace, 3)
+	namespaces[0] = Namespace{Name: receiverNamespace}
+	namespaces[1] = Namespace{Name: debugNamespace}
+	namespaces[2] = Namespace{Name: remotingNamespace}
+
+	// Create session for Backdrop application
+	sessionId := "AD3DFC60-A6AE-4532-87AF-18504DA22607"
+	applications := make(map[string]*Application, 1)
+	applications[sessionId] = &Application{
+		AppId:       backdropAppId,
+		DisplayName: "Backdrop",
+		Namespaces:  namespaces,
+		SessionId:   sessionId,
+		StatusText:  "",
+		TransportId: "pid-22607",
+	}
+
+	// Allow clients to start Android or Chrome mirroring apps
+	availableApps := make([]string, 2)
+	availableApps[0] = androidMirroringAppId
+	availableApps[1] = chromeMirroringAppId
+
 	clientConnection := ClientConnection{
-		applications: defaultApplications(),
-		castChannel:  castChannel,
-		conn:         conn,
-		device:       device,
-		mirrors:      make(map[string]*Mirror),
-		log:          log,
-		receiverId:   "0",
-		relayClient:  relayClient,
-		senderId:     "0",
+		applications:  applications,
+		availableApps: availableApps,
+		castChannel:   castChannel,
+		conn:          conn,
+		device:        device,
+		id:            id,
+		sessions:      make(map[string]*Session),
+		log:           log,
+		receiverId:    "0",
+		relayClient:   relayClient,
+		senderId:      "0",
 	}
 
 	go func() {

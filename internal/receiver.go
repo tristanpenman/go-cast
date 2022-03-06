@@ -2,10 +2,8 @@ package internal
 
 import (
 	"encoding/json"
+	"sort"
 )
-
-const androidMirroringAppId = "674A0243"
-const chromeMirroringAppId = "0F5096E8"
 
 type ReceiverMessage struct {
 	RequestId int    `json:"requestId"`
@@ -34,7 +32,7 @@ func (clientConnection *ClientConnection) handleGetAppAvailability(data string) 
 
 	availability := make(map[string]string)
 	for _, appId := range request.AppId {
-		if appId == androidMirroringAppId || appId == chromeMirroringAppId {
+		if sort.SearchStrings(clientConnection.availableApps, appId) < len(clientConnection.availableApps) {
 			availability[appId] = "APP_AVAILABLE"
 		} else {
 			availability[appId] = "APP_UNAVAILABLE"
@@ -75,6 +73,18 @@ type getStatusResponse struct {
 	Status status `json:"status"`
 }
 
+func flattenApplications(applications map[string]*Application) []Application {
+	flattened := make([]Application, len(applications))
+	var index = 0
+	for _, application := range applications {
+		// TODO: convert from a more natural internal state to the Application interface
+		flattened[index] = *application
+		index++
+	}
+
+	return flattened
+}
+
 func (clientConnection *ClientConnection) handleGetStatus(requestId int) {
 	response := getStatusResponse{
 		ReceiverMessage: &ReceiverMessage{
@@ -82,7 +92,7 @@ func (clientConnection *ClientConnection) handleGetStatus(requestId int) {
 			Type:      "GET_STATUS",
 		},
 		Status: status{
-			Applications:  clientConnection.applications,
+			Applications:  flattenApplications(clientConnection.applications),
 			IsActiveInput: true,
 			Volume: volume{
 				Level: 1,
@@ -110,7 +120,7 @@ func (clientConnection *ClientConnection) handleLaunch(data string) {
 	var request launchRequest
 	err := json.Unmarshal([]byte(data), &request)
 	if err != nil {
-		clientConnection.log.Error("failed to unmarshall launch data", "err", err)
+		clientConnection.log.Error("failed to unmarshall launch request", "err", err)
 		return
 	}
 
@@ -122,13 +132,20 @@ func (clientConnection *ClientConnection) handleLaunch(data string) {
 }
 
 type stopRequest struct {
+	*ReceiverMessage
+
+	SessionId string `json:"sessionId"`
 }
 
-type stopResponse struct {
-}
+func (clientConnection *ClientConnection) handleStop(data string) {
+	var request stopRequest
+	err := json.Unmarshal([]byte(data), &request)
+	if err != nil {
+		clientConnection.log.Error("failed to unmarshall stop request", "err", err)
+		return
+	}
 
-func (clientConnection *ClientConnection) handleStop() {
-
+	clientConnection.handleGetStatus(request.RequestId)
 }
 
 func (clientConnection *ClientConnection) handleReceiverMessage(data string) {
@@ -150,7 +167,7 @@ func (clientConnection *ClientConnection) handleReceiverMessage(data string) {
 		clientConnection.handleLaunch(data)
 		break
 	case "STOP":
-		clientConnection.handleStop()
+		clientConnection.handleStop(data)
 		break
 	default:
 		clientConnection.log.Error("unknown receiver message type", "type", parsed.Type)
