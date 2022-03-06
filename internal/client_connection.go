@@ -36,6 +36,7 @@ type ClientConnection struct {
 	conn         net.Conn
 	device       Device
 	log          hclog.Logger
+	mirrors      map[string]*Mirror
 	receiverId   string
 	relayClient  *Client
 	senderId     string
@@ -99,6 +100,9 @@ func (clientConnection *ClientConnection) startApplication(appId string) bool {
 		return false
 	}
 
+	// create new mirroring session
+	mirror := NewMirror()
+	clientConnection.mirrors[application.SessionId] = mirror
 	clientConnection.applications = append(clientConnection.applications, application)
 
 	return true
@@ -181,6 +185,7 @@ func NewClientConnection(device Device, conn net.Conn, id int, manifest map[stri
 		castChannel:  castChannel,
 		conn:         conn,
 		device:       device,
+		mirrors:      make(map[string]*Mirror),
 		log:          log,
 		receiverId:   "0",
 		relayClient:  relayClient,
