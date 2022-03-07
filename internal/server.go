@@ -19,7 +19,7 @@ type Server struct {
 }
 
 func NewServer(
-	device Device,
+	device *Device,
 	manifest map[string]string,
 	clientPrefix *string,
 	iface *string,

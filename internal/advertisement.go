@@ -14,7 +14,7 @@ type Advertisement struct {
 	server *mdns.Server
 }
 
-func NewAdvertisement(device Device, hostname *string, port int) *Advertisement {
+func NewAdvertisement(device *Device, hostname *string, port int) *Advertisement {
 	var log = NewLogger("advertisement")
 
 	log.Info("starting mdns...")
