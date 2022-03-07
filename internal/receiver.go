@@ -30,9 +30,10 @@ func (clientConnection *ClientConnection) handleGetAppAvailability(data string) 
 		return
 	}
 
+	availableApps := clientConnection.device.AvailableApps
 	availability := make(map[string]string)
 	for _, appId := range request.AppId {
-		if sort.SearchStrings(clientConnection.availableApps, appId) < len(clientConnection.availableApps) {
+		if sort.SearchStrings(availableApps, appId) < len(availableApps) {
 			availability[appId] = "APP_AVAILABLE"
 		} else {
 			availability[appId] = "APP_UNAVAILABLE"
@@ -62,9 +63,9 @@ type volume struct {
 }
 
 type status struct {
-	Applications  []Application `json:"applications"`
-	IsActiveInput bool          `json:"isActiveInput"`
-	Volume        volume        `json:"volume"`
+	Applications  []ApplicationStatus `json:"applications"`
+	IsActiveInput bool                `json:"isActiveInput"`
+	Volume        volume              `json:"volume"`
 }
 
 type getStatusResponse struct {
@@ -73,16 +74,47 @@ type getStatusResponse struct {
 	Status status `json:"status"`
 }
 
-func flattenApplications(applications map[string]*Application) []Application {
-	flattened := make([]Application, len(applications))
+type Namespace struct {
+	Name string `json:"name"`
+}
+
+type ApplicationStatus struct {
+	AppId       string      `json:"appId"`
+	DisplayName string      `json:"displayName"`
+	Namespaces  []Namespace `json:"namespaces"`
+	SessionId   string      `json:"sessionId"`
+	StatusText  string      `json:"statusText"`
+	TransportId string      `json:"transportId"`
+}
+
+func marshallNamespaces(namespaces []string) []Namespace {
+	marshalled := make([]Namespace, len(namespaces))
+	for index, namespace := range namespaces {
+		marshalled[index] = Namespace{
+			Name: namespace,
+		}
+	}
+
+	return marshalled
+}
+
+func marshallApplicationStatuses(applications map[string]*Application) []ApplicationStatus {
+	marshalled := make([]ApplicationStatus, len(applications))
 	var index = 0
 	for _, application := range applications {
 		// TODO: convert from a more natural internal state to the Application interface
-		flattened[index] = *application
+		marshalled[index] = ApplicationStatus{
+			AppId:       application.AppId,
+			DisplayName: application.DisplayName,
+			Namespaces:  marshallNamespaces(application.Namespaces),
+			SessionId:   application.SessionId,
+			StatusText:  application.StatusText,
+			TransportId: application.TransportId,
+		}
 		index++
 	}
 
-	return flattened
+	return marshalled
 }
 
 func (clientConnection *ClientConnection) handleGetStatus(requestId int) {
@@ -92,7 +124,7 @@ func (clientConnection *ClientConnection) handleGetStatus(requestId int) {
 			Type:      "GET_STATUS",
 		},
 		Status: status{
-			Applications:  flattenApplications(clientConnection.applications),
+			Applications:  marshallApplicationStatuses(clientConnection.device.Applications),
 			IsActiveInput: true,
 			Volume: volume{
 				Level: 1,
@@ -118,17 +150,18 @@ type launchRequest struct {
 
 func (clientConnection *ClientConnection) handleLaunch(data string) {
 	var request launchRequest
-	err := json.Unmarshal([]byte(data), &request)
+	var err = json.Unmarshal([]byte(data), &request)
 	if err != nil {
 		clientConnection.log.Error("failed to unmarshall launch request", "err", err)
 		return
 	}
 
-	if clientConnection.startApplication(request.AppId) {
-		clientConnection.handleGetStatus(request.RequestId)
-	} else {
-		// TODO: How to handle application not being started?
+	err = clientConnection.device.startApplication(request.AppId)
+	if err != nil {
+		clientConnection.log.Error("failed to start application", "err", err)
 	}
+
+	clientConnection.handleGetStatus(request.RequestId)
 }
 
 type stopRequest struct {

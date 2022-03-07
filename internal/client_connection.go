@@ -9,90 +9,16 @@ import (
 	"github.com/tristanpenman/go-cast/internal/cast"
 )
 
-const androidMirroringAppId = "674A0243"
-const backdropAppId = "E8C28D3C"
-const chromeMirroringAppId = "0F5096E8"
-
-const debugNamespace = "urn:x-cast:com.google.cast.debug"
-const deviceAuthNamespace = "urn:x-cast:com.google.cast.tp.deviceauth"
-const heartbeatNamespace = "urn:x-cast:com.google.cast.tp.heartbeat"
-const mediaNamespace = "urn:x-cast:com.google.cast.media"
-const receiverNamespace = "urn:x-cast:com.google.cast.receiver"
-const remotingNamespace = "urn:x-cast:com.google.cast.remoting"
-const setupNamespace = "urn:x-cast:com.google.cast.setup"
-
-type Namespace struct {
-	Name string `json:"name"`
-}
-
-type Application struct {
-	AppId       string      `json:"appId"`
-	DisplayName string      `json:"displayName"`
-	Namespaces  []Namespace `json:"namespaces"`
-	SessionId   string      `json:"sessionId"`
-	StatusText  string      `json:"statusText"`
-	TransportId string      `json:"transportId"`
-}
-
 type ClientConnection struct {
-	applications  map[string]*Application
-	availableApps []string
-	castChannel   cast.CastChannel
-	conn          net.Conn
-	device        *Device
-	id            int
-	log           hclog.Logger
-	receiverId    string
-	relayClient   *Client
-	senderId      string
-	sessions      map[string]*Session
-}
-
-func (clientConnection *ClientConnection) startApplication(appId string) bool {
-	for _, application := range clientConnection.applications {
-		if application.AppId == appId {
-			clientConnection.log.Warn("application already started", "appId", appId)
-			return true
-		}
-	}
-
-	namespaces := make([]Namespace, 2)
-	namespaces[0] = Namespace{Name: receiverNamespace}
-	namespaces[1] = Namespace{Name: debugNamespace}
-
-	var application Application
-	switch appId {
-	case androidMirroringAppId:
-		application = Application{
-			AppId:       appId,
-			DisplayName: "Android Mirroring",
-			Namespaces:  namespaces,
-			SessionId:   "835ff891-f76f-4a04-8618-a5dc95477075",
-			StatusText:  "",
-			TransportId: "web-5",
-		}
-		break
-	case chromeMirroringAppId:
-		application = Application{
-			AppId:       appId,
-			DisplayName: "Chrome Mirroring",
-			Namespaces:  namespaces,
-			SessionId:   "7E2FF513-CDF6-9A91-2B28-3E3DE7BAC174",
-			StatusText:  "",
-			TransportId: "web-5",
-		}
-		break
-	default:
-		clientConnection.log.Error("Unsupported app", "appId", appId)
-		return false
-	}
-
-	// create new mirroring session
-	session := NewSession(application.SessionId)
-	clientConnection.sessions[application.SessionId] = session
-	clientConnection.applications[application.SessionId] = &application
-
-	return true
+	castChannel cast.CastChannel
+	conn        net.Conn
+	device      *Device
+	id          int
+	log         hclog.Logger
+	receiverId  string
+	relayClient *Client
+	senderId    string
+	sessions    map[string]*Session
 }
 
 func (clientConnection *ClientConnection) sendUtf8Message(payload []byte, namespace string) {
@@ -167,41 +93,16 @@ func NewClientConnection(device *Device, conn net.Conn, id int, manifest map[str
 
 	castChannel := cast.CreateCastChannel(conn, log)
 
-	// Namespaces covered by the Backdrop appllication
-	namespaces := make([]Namespace, 3)
-	namespaces[0] = Namespace{Name: receiverNamespace}
-	namespaces[1] = Namespace{Name: debugNamespace}
-	namespaces[2] = Namespace{Name: remotingNamespace}
-
-	// Create session for Backdrop application
-	sessionId := "AD3DFC60-A6AE-4532-87AF-18504DA22607"
-	applications := make(map[string]*Application, 1)
-	applications[sessionId] = &Application{
-		AppId:       backdropAppId,
-		DisplayName: "Backdrop",
-		Namespaces:  namespaces,
-		SessionId:   sessionId,
-		StatusText:  "",
-		TransportId: "pid-22607",
-	}
-
-	// Allow clients to start Android or Chrome mirroring apps
-	availableApps := make([]string, 2)
-	availableApps[0] = androidMirroringAppId
-	availableApps[1] = chromeMirroringAppId
-
 	clientConnection := ClientConnection{
-		applications:  applications,
-		availableApps: availableApps,
-		castChannel:   castChannel,
-		conn:          conn,
-		device:        device,
-		id:            id,
-		sessions:      make(map[string]*Session),
-		log:           log,
-		receiverId:    "0",
-		relayClient:   relayClient,
-		senderId:      "0",
+		castChannel: castChannel,
+		conn:        conn,
+		device:      device,
+		id:          id,
+		sessions:    make(map[string]*Session),
+		log:         log,
+		receiverId:  "0",
+		relayClient: relayClient,
+		senderId:    "0",
 	}
 
 	go func() {
