@@ -24,14 +24,14 @@ type setupResponse struct {
 	Data setupResponseData
 }
 
-func (clientConnection *ClientConnection) handleSetupMessage(data string) []byte {
+func (clientConnection *ClientConnection) handleSetupMessage(data string) {
 	clientConnection.log.Info("setup", "data", data)
 
 	var message SetupMessage
 	err := json.Unmarshal([]byte(data), &message)
 	if err != nil {
 		clientConnection.log.Error("failed to parse setup message", "err", err)
-		return nil
+		return
 	}
 
 	response := setupResponse{
@@ -47,7 +47,12 @@ func (clientConnection *ClientConnection) handleSetupMessage(data string) []byte
 		},
 	}
 
-	bytes, _ := json.Marshal(response)
+	bytes, err := json.Marshal(response)
+	if err != nil {
+		clientConnection.log.Error("failed to marshall heartbeat response")
+		return
+	}
 
-	return bytes
+	payloadUtf8 := string(bytes)
+	clientConnection.sendUtf8(setupNamespace, &payloadUtf8)
 }

@@ -15,28 +15,44 @@ type ClientConnection struct {
 	device      *Device
 	id          int
 	log         hclog.Logger
-	receiverId  string
 	relayClient *Client
-	senderId    string
 	sessions    map[string]*Session
+
+	// virtual connection state
+	connected  bool
+	receiverId string
+	senderId   string
 }
 
-func (clientConnection *ClientConnection) sendUtf8Message(payload []byte, namespace string) {
-	payloadType := cast.CastMessage_STRING
-	payloadUtf8 := string(payload)
+func (clientConnection *ClientConnection) sendBinary(namespace string, payloadBinary []byte) {
+	payloadType := cast.CastMessage_BINARY
 	protocolVersion := cast.CastMessage_CASTV2_1_0
-
 	castMessage := cast.CastMessage{
 		DestinationId:   &clientConnection.senderId,
 		Namespace:       &namespace,
-		PayloadUtf8:     &payloadUtf8,
+		PayloadBinary:   payloadBinary,
 		PayloadType:     &payloadType,
 		ProtocolVersion: &protocolVersion,
 		SourceId:        &clientConnection.receiverId,
 	}
 
 	clientConnection.log.Info("sending", "castMessage", castMessage.String())
+	clientConnection.castChannel.Send(&castMessage)
+}
 
+func (clientConnection *ClientConnection) sendUtf8(namespace string, payloadUtf8 *string) {
+	payloadType := cast.CastMessage_STRING
+	protocolVersion := cast.CastMessage_CASTV2_1_0
+	castMessage := cast.CastMessage{
+		DestinationId:   &clientConnection.senderId,
+		Namespace:       &namespace,
+		PayloadUtf8:     payloadUtf8,
+		PayloadType:     &payloadType,
+		ProtocolVersion: &protocolVersion,
+		SourceId:        &clientConnection.receiverId,
+	}
+
+	clientConnection.log.Info("sending", "castMessage", castMessage.String())
 	clientConnection.castChannel.Send(&castMessage)
 }
 
@@ -58,19 +74,13 @@ func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.Ca
 		clientConnection.log.Error("already connected; ignoring connection message")
 		return
 	case heartbeatNamespace:
-		responsePayload := clientConnection.handleHeartbeatMessage(*castMessage.PayloadUtf8)
-		if responsePayload != nil {
-			clientConnection.sendUtf8Message(responsePayload, heartbeatNamespace)
-		}
+		clientConnection.handleHeartbeatMessage(*castMessage.PayloadUtf8)
 		return
 	case receiverNamespace:
 		clientConnection.handleReceiverMessage(*castMessage.PayloadUtf8)
 		return
 	case setupNamespace:
-		responsePayload := clientConnection.handleSetupMessage(*castMessage.PayloadUtf8)
-		if responsePayload != nil {
-			clientConnection.sendUtf8Message(responsePayload, setupNamespace)
-		}
+		clientConnection.handleSetupMessage(*castMessage.PayloadUtf8)
 		return
 	// unsupported namespaces
 	case debugNamespace:
@@ -100,9 +110,12 @@ func NewClientConnection(device *Device, conn net.Conn, id int, manifest map[str
 		id:          id,
 		sessions:    make(map[string]*Session),
 		log:         log,
-		receiverId:  "0",
 		relayClient: relayClient,
-		senderId:    "0",
+
+		// virtual connection state
+		connected:  false,
+		receiverId: "0",
+		senderId:   "0",
 	}
 
 	go func() {

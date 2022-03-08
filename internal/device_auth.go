@@ -9,7 +9,7 @@ import (
 	"github.com/tristanpenman/go-cast/internal/cast"
 )
 
-func (clientConnection *ClientConnection) handleDeviceAuthChallenge(manifest map[string]string) bool {
+func (clientConnection *ClientConnection) handleDeviceAuthChallenge(manifest map[string]string) {
 	// intermediate and platform certs are in PEM format
 	// TODO: check that we don't have any remaining data in `rest`
 	ica, _ := pem.Decode([]byte(manifest["ica"]))
@@ -24,48 +24,30 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(manifest map
 
 	hashAlgorithm := cast.HashAlgorithm_SHA256
 
-	payloadBytes, err := proto.Marshal(&cast.DeviceAuthMessage{
+	deviceAuthMessage := &cast.DeviceAuthMessage{
 		Response: &cast.AuthResponse{
 			Signature:               sig,
 			ClientAuthCertificate:   platform.Bytes,
 			IntermediateCertificate: intermediateCertificate,
 			HashAlgorithm:           &hashAlgorithm,
 		},
-	})
+	}
 
+	payloadBinary, err := proto.Marshal(deviceAuthMessage)
 	if err != nil {
 		clientConnection.log.Error("failed to encode device auth response", "err", err)
-		return false
+		return
 	}
 
-	namespace := deviceAuthNamespace
-	payloadType := cast.CastMessage_BINARY
-	protocolVersion := cast.CastMessage_CASTV2_1_0
-	destinationId := "sender-0"
-	sourceId := "receiver-0"
-	message := cast.CastMessage{
-		DestinationId:   &destinationId,
-		Namespace:       &namespace,
-		PayloadBinary:   payloadBytes,
-		PayloadType:     &payloadType,
-		ProtocolVersion: &protocolVersion,
-		SourceId:        &sourceId,
-	}
-
-	if clientConnection.log.IsDebug() {
-		clientConnection.log.Debug("sending device auth response", "message", message.String())
-	} else {
-		clientConnection.log.Info("sending device auth response")
-	}
-
-	return clientConnection.castChannel.Send(&message)
+	clientConnection.sendBinary(deviceAuthNamespace, payloadBinary)
 }
 
 func (client *Client) sendDeviceAuthChallenge() bool {
-	payloadBytes, err := proto.Marshal(&cast.DeviceAuthMessage{
+	deviceAuthMessage := &cast.DeviceAuthMessage{
 		Challenge: &cast.AuthChallenge{},
-	})
+	}
 
+	payloadBinary, err := proto.Marshal(deviceAuthMessage)
 	if err != nil {
 		client.log.Error("failed to encode device auth challenge", "err", err)
 		return false
@@ -79,7 +61,7 @@ func (client *Client) sendDeviceAuthChallenge() bool {
 	message := cast.CastMessage{
 		DestinationId:   &destinationId,
 		Namespace:       &namespace,
-		PayloadBinary:   payloadBytes,
+		PayloadBinary:   payloadBinary,
 		PayloadType:     &payloadType,
 		ProtocolVersion: &protocolVersion,
 		SourceId:        &sourceId,

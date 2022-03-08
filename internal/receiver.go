@@ -54,7 +54,8 @@ func (clientConnection *ClientConnection) handleGetAppAvailability(data string) 
 		return
 	}
 
-	clientConnection.sendUtf8Message(bytes, receiverNamespace)
+	payloadUtf8 := string(bytes)
+	clientConnection.sendUtf8(receiverNamespace, &payloadUtf8)
 }
 
 type volume struct {
@@ -139,7 +140,8 @@ func (clientConnection *ClientConnection) handleGetStatus(requestId int) {
 		return
 	}
 
-	clientConnection.sendUtf8Message(bytes, receiverNamespace)
+	payloadUtf8 := string(bytes)
+	clientConnection.sendUtf8(receiverNamespace, &payloadUtf8)
 }
 
 type launchRequest struct {
