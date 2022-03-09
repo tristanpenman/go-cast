@@ -3,6 +3,7 @@
 - Receiver
   + ~~Implement enough receiver functionality to advertise an app~~
   + ~~Launch apps~~
+  + Properly handle CONNECT messages and transport logic
   + Receive and decrypt RTP stream
   + Forward video content to ffmpeg or mpv
   - Relay functionality

@@ -2,8 +2,18 @@ package internal
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
+
+	"github.com/hashicorp/go-hclog"
+	"github.com/tristanpenman/go-cast/internal/cast"
 )
+
+type Receiver struct {
+	device *Device
+	id     string
+	log    hclog.Logger
+}
 
 type ReceiverMessage struct {
 	RequestId int    `json:"requestId"`
@@ -22,15 +32,15 @@ type getAppAvailabilityResponse struct {
 	Availability map[string]string `json:"availability"`
 }
 
-func (clientConnection *ClientConnection) handleGetAppAvailability(data string) {
+func (receiver *Receiver) handleGetAppAvailability(data string) {
 	var request getAppAvailabilityRequest
 	err := json.Unmarshal([]byte(data), &request)
 	if err != nil {
-		clientConnection.log.Error("failed to connect data", "err", err)
+		receiver.log.Error("failed to connect data", "err", err)
 		return
 	}
 
-	availableApps := clientConnection.device.AvailableApps
+	availableApps := receiver.device.AvailableApps
 	availability := make(map[string]string)
 	for _, appId := range request.AppId {
 		if sort.SearchStrings(availableApps, appId) < len(availableApps) {
@@ -50,12 +60,13 @@ func (clientConnection *ClientConnection) handleGetAppAvailability(data string) 
 
 	bytes, err := json.Marshal(response)
 	if err != nil {
-		clientConnection.log.Error("failed to marshall response for GET_APP_AVAILABILITY message")
+		receiver.log.Error("failed to marshall response for GET_APP_AVAILABILITY message")
 		return
 	}
 
+	// broadcast app availability to all subscribers
 	payloadUtf8 := string(bytes)
-	clientConnection.sendUtf8(receiverNamespace, &payloadUtf8)
+	receiver.device.broadcastUtf8(receiverNamespace, &payloadUtf8, receiver.id)
 }
 
 type volume struct {
@@ -118,14 +129,14 @@ func marshallApplicationStatuses(applications map[string]*Application) []Applica
 	return marshalled
 }
 
-func (clientConnection *ClientConnection) handleGetStatus(requestId int) {
+func (receiver *Receiver) handleGetStatus(requestId int) {
 	response := getStatusResponse{
 		ReceiverMessage: &ReceiverMessage{
 			RequestId: requestId,
 			Type:      "GET_STATUS",
 		},
 		Status: status{
-			Applications:  marshallApplicationStatuses(clientConnection.device.Applications),
+			Applications:  marshallApplicationStatuses(receiver.device.Applications),
 			IsActiveInput: true,
 			Volume: volume{
 				Level: 1,
@@ -136,12 +147,12 @@ func (clientConnection *ClientConnection) handleGetStatus(requestId int) {
 
 	bytes, err := json.Marshal(response)
 	if err != nil {
-		clientConnection.log.Error("failed to marshall response for GET_STATUS message")
+		receiver.log.Error("failed to marshall response for GET_STATUS message")
 		return
 	}
 
 	payloadUtf8 := string(bytes)
-	clientConnection.sendUtf8(receiverNamespace, &payloadUtf8)
+	receiver.device.broadcastUtf8(receiverNamespace, &payloadUtf8, receiver.id)
 }
 
 type launchRequest struct {
@@ -150,20 +161,20 @@ type launchRequest struct {
 	AppId string `json:"appId"`
 }
 
-func (clientConnection *ClientConnection) handleLaunch(data string) {
+func (receiver *Receiver) handleLaunch(data string) {
 	var request launchRequest
 	var err = json.Unmarshal([]byte(data), &request)
 	if err != nil {
-		clientConnection.log.Error("failed to unmarshall launch request", "err", err)
+		receiver.log.Error("failed to unmarshall launch request", "err", err)
 		return
 	}
 
-	err = clientConnection.device.startApplication(request.AppId)
+	err = receiver.device.startApplication(request.AppId)
 	if err != nil {
-		clientConnection.log.Error("failed to start application", "err", err)
+		receiver.log.Error("failed to start application", "err", err)
 	}
 
-	clientConnection.handleGetStatus(request.RequestId)
+	receiver.handleGetStatus(request.RequestId)
 }
 
 type stopRequest struct {
@@ -172,40 +183,101 @@ type stopRequest struct {
 	SessionId string `json:"sessionId"`
 }
 
-func (clientConnection *ClientConnection) handleStop(data string) {
+func (receiver *Receiver) handleStop(data string) {
 	var request stopRequest
 	err := json.Unmarshal([]byte(data), &request)
 	if err != nil {
-		clientConnection.log.Error("failed to unmarshall stop request", "err", err)
+		receiver.log.Error("failed to unmarshall stop request", "err", err)
 		return
 	}
 
-	clientConnection.handleGetStatus(request.RequestId)
+	receiver.handleGetStatus(request.RequestId)
 }
 
-func (clientConnection *ClientConnection) handleReceiverMessage(data string) {
+func (receiver *Receiver) handleReceiverMessage(castMessage *cast.CastMessage) {
 	var parsed ReceiverMessage
-	err := json.Unmarshal([]byte(data), &parsed)
+	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &parsed)
 	if err != nil {
-		clientConnection.log.Error("failed to parse receiver message", "err", err)
+		receiver.log.Error("failed to parse receiver message", "err", err)
 		return
 	}
 
 	switch parsed.Type {
 	case "GET_APP_AVAILABILITY":
-		clientConnection.handleGetAppAvailability(data)
+		receiver.handleGetAppAvailability(*castMessage.PayloadUtf8)
 		break
 	case "GET_STATUS":
-		clientConnection.handleGetStatus(parsed.RequestId)
+		receiver.handleGetStatus(parsed.RequestId)
 		break
 	case "LAUNCH":
-		clientConnection.handleLaunch(data)
+		receiver.handleLaunch(*castMessage.PayloadUtf8)
 		break
 	case "STOP":
-		clientConnection.handleStop(data)
+		receiver.handleStop(*castMessage.PayloadUtf8)
 		break
 	default:
-		clientConnection.log.Error("unknown receiver message type", "type", parsed.Type)
+		receiver.log.Error("unknown receiver message type", "type", parsed.Type)
 		break
+	}
+}
+
+type heartbeatMessage struct {
+	Type string `json:"type"`
+}
+
+func (receiver *Receiver) handleHeartbeatMessage(castMessage *cast.CastMessage) {
+	var message heartbeatMessage
+	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &message)
+	if err != nil {
+		receiver.log.Error("failed to parse certificate manifest file", "err", err)
+		return
+	}
+
+	if message.Type != "PING" {
+		receiver.log.Error("received unexpected heartbeat message type", "type", message.Type)
+		return
+	}
+
+	// turn the message into a pong message
+	message.Type = "PONG"
+	bytes, err := json.Marshal(message)
+	if err != nil {
+		receiver.log.Error("failed to marshall heartbeat response")
+		return
+	}
+
+	payloadUtf8 := string(bytes)
+	receiver.device.sendUtf8(heartbeatNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
+}
+
+func (receiver *Receiver) HandleCastMessage(castMessage *cast.CastMessage) {
+	switch *castMessage.Namespace {
+	case heartbeatNamespace:
+		receiver.handleHeartbeatMessage(castMessage)
+		return
+	case receiverNamespace:
+		receiver.handleReceiverMessage(castMessage)
+		return
+	default:
+		receiver.log.Info("received message for unknown namespace", "namespace", *castMessage.Namespace)
+	}
+}
+
+func (receiver *Receiver) Id() string {
+	return receiver.id
+}
+
+func (receiver *Receiver) Namespaces() []string {
+	//TODO implement me
+	panic("implement me")
+}
+
+func NewReceiver(device *Device, id string) *Receiver {
+	log := NewLogger(fmt.Sprintf("receiver (%s)", id))
+
+	return &Receiver{
+		device: device,
+		id:     id,
+		log:    log,
 	}
 }

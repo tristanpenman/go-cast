@@ -9,7 +9,7 @@ import (
 	"github.com/tristanpenman/go-cast/internal/cast"
 )
 
-func (clientConnection *ClientConnection) handleDeviceAuthChallenge(manifest map[string]string) {
+func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cast.CastMessage, manifest map[string]string) {
 	// intermediate and platform certs are in PEM format
 	// TODO: check that we don't have any remaining data in `rest`
 	ica, _ := pem.Decode([]byte(manifest["ica"]))
@@ -39,7 +39,7 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(manifest map
 		return
 	}
 
-	clientConnection.sendBinary(deviceAuthNamespace, payloadBinary)
+	clientConnection.sendBinary(deviceAuthNamespace, payloadBinary, *message.DestinationId, *message.SourceId)
 }
 
 func (client *Client) sendDeviceAuthChallenge() bool {

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 
@@ -17,79 +18,73 @@ type ClientConnection struct {
 	log         hclog.Logger
 	relayClient *Client
 	sessions    map[string]*Session
-
-	// virtual connection state
-	connected  bool
-	receiverId string
-	senderId   string
 }
 
-func (clientConnection *ClientConnection) sendBinary(namespace string, payloadBinary []byte) {
+func (clientConnection *ClientConnection) sendBinary(namespace string, payloadBinary []byte, sourceId string, destinationId string) {
 	payloadType := cast.CastMessage_BINARY
 	protocolVersion := cast.CastMessage_CASTV2_1_0
 	castMessage := cast.CastMessage{
-		DestinationId:   &clientConnection.senderId,
+		DestinationId:   &destinationId,
 		Namespace:       &namespace,
 		PayloadBinary:   payloadBinary,
 		PayloadType:     &payloadType,
 		ProtocolVersion: &protocolVersion,
-		SourceId:        &clientConnection.receiverId,
+		SourceId:        &sourceId,
 	}
 
-	clientConnection.log.Info("sending", "castMessage", castMessage.String())
+	if clientConnection.log.IsDebug() {
+		clientConnection.log.Debug("sending", "castMessage", castMessage.String())
+	} else {
+		clientConnection.log.Info("sending", "namespace", *castMessage.Namespace, "sourceId", *castMessage.SourceId, "destinationId", *castMessage.DestinationId, "payloadType", "BINARY")
+	}
+
 	clientConnection.castChannel.Send(&castMessage)
 }
 
-func (clientConnection *ClientConnection) sendUtf8(namespace string, payloadUtf8 *string) {
+func (clientConnection *ClientConnection) sendUtf8(namespace string, payloadUtf8 *string, sourceId string, destinationId string) {
 	payloadType := cast.CastMessage_STRING
 	protocolVersion := cast.CastMessage_CASTV2_1_0
 	castMessage := cast.CastMessage{
-		DestinationId:   &clientConnection.senderId,
+		DestinationId:   &destinationId,
 		Namespace:       &namespace,
 		PayloadUtf8:     payloadUtf8,
 		PayloadType:     &payloadType,
 		ProtocolVersion: &protocolVersion,
-		SourceId:        &clientConnection.receiverId,
+		SourceId:        &sourceId,
 	}
 
-	clientConnection.log.Info("sending", "castMessage", castMessage.String())
+	if clientConnection.log.IsDebug() {
+		clientConnection.log.Debug("sending", "castMessage", castMessage.String())
+	} else {
+		clientConnection.log.Info("sending", "namespace", *castMessage.Namespace, "sourceId", *castMessage.SourceId, "destinationId", *castMessage.DestinationId, "payloadType", "STRING", "payloadUtf8", *castMessage.PayloadUtf8)
+	}
+
 	clientConnection.castChannel.Send(&castMessage)
 }
 
-func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.CastMessage) {
-	// only handle connect messages if not already connected
-	if clientConnection.receiverId == "0" && clientConnection.senderId == "0" {
-		if *castMessage.Namespace == connectNamespace {
-			clientConnection.handleConnectMessage(*castMessage.PayloadUtf8)
-			clientConnection.senderId = *castMessage.SourceId
-			clientConnection.receiverId = *castMessage.DestinationId
-		} else {
-			clientConnection.log.Error("not connected; ignoring message", "namespace", *castMessage.Namespace)
-		}
+type connectRequest struct {
+	ConnType json.Number `json:"connType"`
+}
+
+func (clientConnection *ClientConnection) handleConnectMessage(castMessage *cast.CastMessage) {
+	var request connectRequest
+	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &request)
+	if err != nil {
+		clientConnection.log.Error("failed to connect data", "err", err)
 		return
 	}
 
-	switch *castMessage.Namespace {
-	case connectNamespace:
-		clientConnection.log.Error("already connected; ignoring connection message")
+	clientConnection.device.registerSubscription(clientConnection, *castMessage.SourceId, *castMessage.DestinationId)
+}
+
+func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.CastMessage) {
+	// CONNECT messages are special, and are essentially used to subscribe to status updates from a receiver
+	if *castMessage.Namespace == connectionNamespace {
+		clientConnection.handleConnectMessage(castMessage)
 		return
-	case heartbeatNamespace:
-		clientConnection.handleHeartbeatMessage(*castMessage.PayloadUtf8)
-		return
-	case receiverNamespace:
-		clientConnection.handleReceiverMessage(*castMessage.PayloadUtf8)
-		return
-	case setupNamespace:
-		clientConnection.handleSetupMessage(*castMessage.PayloadUtf8)
-		return
-	// unsupported namespaces
-	case debugNamespace:
-	case mediaNamespace:
-		clientConnection.log.Warn("received message for known but unsupported namespace", "namespace", *castMessage.Namespace)
-		break
-	default:
-		clientConnection.log.Info("received message for unknown namespace", "namespace", *castMessage.Namespace)
 	}
+
+	clientConnection.device.forwardCastMessage(castMessage)
 }
 
 func (clientConnection *ClientConnection) relayCastMessage(castMessage *cast.CastMessage) {
@@ -99,7 +94,7 @@ func (clientConnection *ClientConnection) relayCastMessage(castMessage *cast.Cas
 }
 
 func NewClientConnection(device *Device, conn net.Conn, id int, manifest map[string]string, relayClient *Client) *ClientConnection {
-	var log = NewLogger(fmt.Sprintf("client-connection (%d)", id))
+	log := NewLogger(fmt.Sprintf("client-connection (%d)", id))
 
 	castChannel := cast.CreateCastChannel(conn, log)
 
@@ -111,11 +106,12 @@ func NewClientConnection(device *Device, conn net.Conn, id int, manifest map[str
 		sessions:    make(map[string]*Session),
 		log:         log,
 		relayClient: relayClient,
+	}
 
-		// virtual connection state
-		connected:  false,
-		receiverId: "0",
-		senderId:   "0",
+	if relayClient == nil {
+		receiver := NewReceiver(device, "receiver-0")
+		device.registerTransport(receiver)
+		device.registerSubscription(&clientConnection, "sender-0", "receiver-0")
 	}
 
 	go func() {
@@ -133,10 +129,17 @@ func NewClientConnection(device *Device, conn net.Conn, id int, manifest map[str
 				}
 
 				if castMessage != nil {
-					log.Info("received", "message", castMessage)
+					if log.IsDebug() {
+						log.Debug("received", "message", castMessage.String())
+					} else if *castMessage.PayloadType == cast.CastMessage_BINARY {
+						log.Info("received", "namespace", *castMessage.Namespace, "sourceId", *castMessage.SourceId, "destinationId", *castMessage.DestinationId, "payloadType", "BINARY")
+					} else {
+						log.Info("received", "namespace", *castMessage.Namespace, "sourceId", *castMessage.SourceId, "destinationId", *castMessage.DestinationId, "payloadType", "STRING", "payloadUtf8", *castMessage.PayloadUtf8)
+					}
+
 					if *castMessage.Namespace == deviceAuthNamespace {
 						// device authentication is always handled locally
-						clientConnection.handleDeviceAuthChallenge(manifest)
+						clientConnection.handleDeviceAuthChallenge(castMessage, manifest)
 					} else if relayClient == nil {
 						clientConnection.handleCastMessage(castMessage)
 					} else {
