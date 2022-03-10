@@ -70,33 +70,34 @@ func (receiver *Receiver) handleGetAppAvailability(data string) {
 }
 
 type volume struct {
-	Level int  `json:"level"`
-	Muted bool `json:"muted"`
-}
-
-type status struct {
-	Applications  []ApplicationStatus `json:"applications"`
-	IsActiveInput bool                `json:"isActiveInput"`
-	Volume        volume              `json:"volume"`
-}
-
-type getStatusResponse struct {
-	*ReceiverMessage
-
-	Status status `json:"status"`
+	Level float32 `json:"level"`
+	Muted bool    `json:"muted"`
 }
 
 type Namespace struct {
 	Name string `json:"name"`
 }
 
-type ApplicationStatus struct {
-	AppId       string      `json:"appId"`
-	DisplayName string      `json:"displayName"`
-	Namespaces  []Namespace `json:"namespaces"`
-	SessionId   string      `json:"sessionId"`
-	StatusText  string      `json:"statusText"`
-	TransportId string      `json:"transportId"`
+type Application struct {
+	AppId        string      `json:"appId"`
+	DisplayName  string      `json:"displayName"`
+	IsIdleScreen bool        `json:"isIdleScreen"`
+	Namespaces   []Namespace `json:"namespaces"`
+	SessionId    string      `json:"sessionId"`
+	StatusText   string      `json:"statusText"`
+	TransportId  string      `json:"transportId"`
+}
+
+type Status struct {
+	Applications  []Application `json:"applications"`
+	IsActiveInput bool          `json:"isActiveInput"`
+	Volume        volume        `json:"volume"`
+}
+
+type getStatusResponse struct {
+	*ReceiverMessage
+
+	Status Status `json:"status"`
 }
 
 func marshallNamespaces(namespaces []string) []Namespace {
@@ -110,18 +111,18 @@ func marshallNamespaces(namespaces []string) []Namespace {
 	return marshalled
 }
 
-func marshallApplicationStatuses(applications map[string]*Application) []ApplicationStatus {
-	marshalled := make([]ApplicationStatus, len(applications))
+func marshallApplicationStatuses(sessions map[string]*Session) []Application {
+	marshalled := make([]Application, len(sessions))
 	var index = 0
-	for _, application := range applications {
-		// TODO: convert from a more natural internal state to the Application interface
-		marshalled[index] = ApplicationStatus{
-			AppId:       application.AppId,
-			DisplayName: application.DisplayName,
-			Namespaces:  marshallNamespaces(application.Namespaces),
-			SessionId:   application.SessionId,
-			StatusText:  application.StatusText,
-			TransportId: application.TransportId,
+	for _, session := range sessions {
+		marshalled[index] = Application{
+			AppId:        session.AppId,
+			DisplayName:  session.DisplayName,
+			IsIdleScreen: false,
+			Namespaces:   marshallNamespaces(session.Namespaces()),
+			SessionId:    session.SessionId,
+			StatusText:   session.StatusText,
+			TransportId:  session.TransportId(),
 		}
 		index++
 	}
@@ -133,13 +134,13 @@ func (receiver *Receiver) handleGetStatus(requestId int) {
 	response := getStatusResponse{
 		ReceiverMessage: &ReceiverMessage{
 			RequestId: requestId,
-			Type:      "GET_STATUS",
+			Type:      "RECEIVER_STATUS",
 		},
-		Status: status{
-			Applications:  marshallApplicationStatuses(receiver.device.Applications),
+		Status: Status{
+			Applications:  marshallApplicationStatuses(receiver.device.Sessions),
 			IsActiveInput: true,
 			Volume: volume{
-				Level: 1,
+				Level: 1.0,
 				Muted: false,
 			},
 		},
@@ -147,7 +148,7 @@ func (receiver *Receiver) handleGetStatus(requestId int) {
 
 	bytes, err := json.Marshal(response)
 	if err != nil {
-		receiver.log.Error("failed to marshall response for GET_STATUS message")
+		receiver.log.Error("failed to marshall RECEIVER_STATUS message")
 		return
 	}
 
@@ -263,13 +264,8 @@ func (receiver *Receiver) HandleCastMessage(castMessage *cast.CastMessage) {
 	}
 }
 
-func (receiver *Receiver) Id() string {
+func (receiver *Receiver) TransportId() string {
 	return receiver.id
-}
-
-func (receiver *Receiver) Namespaces() []string {
-	//TODO implement me
-	panic("implement me")
 }
 
 func NewReceiver(device *Device, id string) *Receiver {

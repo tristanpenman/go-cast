@@ -3,24 +3,14 @@ package internal
 import (
 	"errors"
 	"fmt"
-
+	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 
 	"github.com/tristanpenman/go-cast/internal/cast"
 )
 
 const androidMirroringAppId = "674A0243"
-const backdropAppId = "E8C28D3C"
 const chromeMirroringAppId = "0F5096E8"
-
-type Application struct {
-	AppId       string
-	DisplayName string
-	Namespaces  []string
-	SessionId   string
-	StatusText  string
-	TransportId string
-}
 
 type Subscription struct {
 	clientConnection *ClientConnection
@@ -33,14 +23,15 @@ type Transport struct {
 }
 
 type Device struct {
-	Applications  map[string]*Application
 	AvailableApps []string
 	DeviceModel   string
 	FriendlyName  string
 	Id            string
+	Sessions      map[string]*Session
 
 	// implementation
 	log        hclog.Logger
+	nextPid    int
 	transports map[string]*Transport
 }
 
@@ -109,7 +100,7 @@ func (device *Device) registerSubscription(clientConnection *ClientConnection, r
 }
 
 func (device *Device) registerTransport(castTransport CastTransport) {
-	device.transports[castTransport.Id()] = &Transport{
+	device.transports[castTransport.TransportId()] = &Transport{
 		castTransport: castTransport,
 		subscriptions: make([]Subscription, 0),
 	}
@@ -153,44 +144,43 @@ func (device *Device) sendUtf8(namespace string, payloadUtf8 *string, sourceId s
 	}
 }
 
+func (device *Device) startAndroidMirroringSession() {
+	transportId := fmt.Sprintf("pid-%d", device.nextPid)
+	device.nextPid++
+
+	session := NewSession(androidMirroringAppId, "Android Mirroring", uuid.New().String(), transportId)
+
+	device.Sessions[session.SessionId] = session
+	device.registerTransport(session)
+}
+
+func (device *Device) startChromeMirroringSession() {
+	transportId := fmt.Sprintf("pid-%d", device.nextPid)
+	device.nextPid++
+
+	session := NewSession(chromeMirroringAppId, "Chrome Mirroring", uuid.New().String(), transportId)
+
+	device.Sessions[session.SessionId] = session
+	device.registerTransport(session)
+}
+
 func (device *Device) startApplication(appId string) error {
-	for _, application := range device.Applications {
-		if application.AppId == appId {
+	for _, session := range device.Sessions {
+		if session.AppId == appId {
 			return errors.New("application already started")
 		}
 	}
 
-	namespaces := make([]string, 2)
-	namespaces[0] = receiverNamespace
-	namespaces[1] = debugNamespace
-
-	var application Application
 	switch appId {
 	case androidMirroringAppId:
-		application = Application{
-			AppId:       androidMirroringAppId,
-			DisplayName: "Android Mirroring",
-			Namespaces:  namespaces,
-			SessionId:   "835ff891-f76f-4a04-8618-a5dc95477075",
-			StatusText:  "",
-			TransportId: "web-5",
-		}
+		device.startAndroidMirroringSession()
 		break
 	case chromeMirroringAppId:
-		application = Application{
-			AppId:       chromeMirroringAppId,
-			DisplayName: "Chrome Mirroring",
-			Namespaces:  namespaces,
-			SessionId:   "7E2FF513-CDF6-9A91-2B28-3E3DE7BAC174",
-			StatusText:  "",
-			TransportId: "web-5",
-		}
+		device.startChromeMirroringSession()
 		break
 	default:
 		return errors.New("unsupported app")
 	}
-
-	device.Applications[application.SessionId] = &application
 
 	return nil
 }
@@ -198,38 +188,23 @@ func (device *Device) startApplication(appId string) error {
 func NewDevice(deviceModel string, friendlyName string, id string) *Device {
 	log := NewLogger(fmt.Sprintf("device (%s)", id))
 
-	// Namespaces covered by the Backdrop appllication
-	namespaces := make([]string, 3)
-	namespaces[0] = receiverNamespace
-	namespaces[1] = debugNamespace
-	namespaces[2] = remotingNamespace
-
-	// Create session for Backdrop application
-	sessionId := "AD3DFC60-A6AE-4532-87AF-18504DA22607"
-	applications := make(map[string]*Application, 1)
-	applications[sessionId] = &Application{
-		AppId:       backdropAppId,
-		DisplayName: "Backdrop",
-		Namespaces:  namespaces,
-		SessionId:   sessionId,
-		StatusText:  "",
-		TransportId: "pid-22607",
-	}
-
 	// Allow clients to start Android or Chrome mirroring apps
 	availableApps := make([]string, 2)
 	availableApps[0] = androidMirroringAppId
 	availableApps[1] = chromeMirroringAppId
 
-	return &Device{
-		Applications:  applications,
+	device := Device{
 		AvailableApps: availableApps,
 		DeviceModel:   deviceModel,
 		FriendlyName:  friendlyName,
 		Id:            id,
+		Sessions:      map[string]*Session{},
 
 		// implementation
 		log:        log,
+		nextPid:    1,
 		transports: make(map[string]*Transport),
 	}
+
+	return &device
 }

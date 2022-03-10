@@ -4,6 +4,5 @@ import "github.com/tristanpenman/go-cast/internal/cast"
 
 type CastTransport interface {
 	HandleCastMessage(message *cast.CastMessage)
-	Id() string
-	Namespaces() []string
+	TransportId() string
 }
