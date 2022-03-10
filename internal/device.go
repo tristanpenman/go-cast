@@ -3,6 +3,7 @@ package internal
 import (
 	"errors"
 	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 
@@ -45,6 +46,41 @@ func (device *Device) forwardCastMessage(castMessage *cast.CastMessage) {
 	transport.castTransport.HandleCastMessage(castMessage)
 }
 
+//
+// Functions to register transports and subscribe to their broadcasts
+//
+
+func (device *Device) registerSubscription(clientConnection *ClientConnection, remoteId string, localId string) {
+	// localId should be a valid transport
+	// remoteId can be anything really
+	// clientConnection is just how we get to the remote
+	// from this, we can construct a Peer
+
+	transport := device.transports[localId]
+	if transport == nil {
+		device.log.Error("attempt to register subscription for non-existent local transport ID", "localId", localId)
+		return
+	}
+
+	subscription := Subscription{
+		clientConnection: clientConnection,
+		remoteId:         remoteId,
+	}
+
+	transport.subscriptions = append(transport.subscriptions, subscription)
+}
+
+func (device *Device) registerTransport(castTransport CastTransport) {
+	device.transports[castTransport.TransportId()] = &Transport{
+		castTransport: castTransport,
+		subscriptions: make([]Subscription, 0),
+	}
+}
+
+//
+// Functions to send messages
+//
+
 func (device *Device) broadcastBinary(namespace string, payloadBinary []byte, sourceId string) {
 	transport := device.transports[sourceId]
 	if transport == nil {
@@ -76,33 +112,6 @@ func (device *Device) broadcastUtf8(namespace string, payloadUtf8 *string, sourc
 
 	for clientConnection, _ := range clientConnections {
 		clientConnection.sendUtf8(namespace, payloadUtf8, sourceId, "*")
-	}
-}
-
-func (device *Device) registerSubscription(clientConnection *ClientConnection, remoteId string, localId string) {
-	// localId should be a valid transport
-	// remoteId can be anything really
-	// clientConnection is just how we get to the remote
-	// from this, we can construct a Peer
-
-	transport := device.transports[localId]
-	if transport == nil {
-		device.log.Error("attempt to register subscription for non-existent local transport ID", "localId", localId)
-		return
-	}
-
-	subscription := Subscription{
-		clientConnection: clientConnection,
-		remoteId:         remoteId,
-	}
-
-	transport.subscriptions = append(transport.subscriptions, subscription)
-}
-
-func (device *Device) registerTransport(castTransport CastTransport) {
-	device.transports[castTransport.TransportId()] = &Transport{
-		castTransport: castTransport,
-		subscriptions: make([]Subscription, 0),
 	}
 }
 
