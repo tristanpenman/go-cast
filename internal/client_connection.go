@@ -35,7 +35,11 @@ func (clientConnection *ClientConnection) sendBinary(namespace string, payloadBi
 	if clientConnection.log.IsDebug() {
 		clientConnection.log.Debug("sending", "castMessage", castMessage.String())
 	} else {
-		clientConnection.log.Info("sending", "namespace", *castMessage.Namespace, "sourceId", *castMessage.SourceId, "destinationId", *castMessage.DestinationId, "payloadType", "BINARY")
+		clientConnection.log.Info("sending",
+			"namespace", *castMessage.Namespace,
+			"sourceId", *castMessage.SourceId,
+			"destinationId", *castMessage.DestinationId,
+			"payloadType", "BINARY")
 	}
 
 	clientConnection.castChannel.Send(&castMessage)
@@ -56,7 +60,12 @@ func (clientConnection *ClientConnection) sendUtf8(namespace string, payloadUtf8
 	if clientConnection.log.IsDebug() {
 		clientConnection.log.Debug("sending", "castMessage", castMessage.String())
 	} else {
-		clientConnection.log.Info("sending", "namespace", *castMessage.Namespace, "sourceId", *castMessage.SourceId, "destinationId", *castMessage.DestinationId, "payloadType", "STRING", "payloadUtf8", *castMessage.PayloadUtf8)
+		clientConnection.log.Info("sending",
+			"namespace", *castMessage.Namespace,
+			"sourceId", *castMessage.SourceId,
+			"destinationId", *castMessage.DestinationId,
+			"payloadType", "STRING",
+			"payloadUtf8", *castMessage.PayloadUtf8)
 	}
 
 	clientConnection.castChannel.Send(&castMessage)
@@ -93,7 +102,13 @@ func (clientConnection *ClientConnection) relayCastMessage(castMessage *cast.Cas
 	clientConnection.relayClient.SendMessage(castMessage)
 }
 
-func NewClientConnection(device *Device, conn net.Conn, id int, manifest map[string]string, relayClient *Client) *ClientConnection {
+func NewClientConnection(
+	device *Device,
+	conn net.Conn,
+	id int,
+	manifest map[string]string,
+	relayClient *Client,
+) *ClientConnection {
 	log := NewLogger(fmt.Sprintf("client-connection (%d)", id))
 
 	castChannel := cast.CreateCastChannel(conn, log)

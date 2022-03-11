@@ -3,9 +3,10 @@ package internal
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/hashicorp/go-hclog"
 	"net"
 	"sync"
+
+	"github.com/hashicorp/go-hclog"
 
 	"github.com/tristanpenman/go-cast/internal/cast"
 )

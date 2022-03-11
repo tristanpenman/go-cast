@@ -3,10 +3,11 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/tristanpenman/go-cast/internal/cast"
 	"net"
 
 	"github.com/hashicorp/go-hclog"
+
+	"github.com/tristanpenman/go-cast/internal/cast"
 )
 
 type Session struct {
