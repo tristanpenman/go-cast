@@ -132,9 +132,18 @@ func NewClientConnection(device *Device, conn net.Conn, id int, manifest map[str
 					if log.IsDebug() {
 						log.Debug("received", "message", castMessage.String())
 					} else if *castMessage.PayloadType == cast.CastMessage_BINARY {
-						log.Info("received", "namespace", *castMessage.Namespace, "sourceId", *castMessage.SourceId, "destinationId", *castMessage.DestinationId, "payloadType", "BINARY")
+						log.Info("received",
+							"namespace", *castMessage.Namespace,
+							"sourceId", *castMessage.SourceId,
+							"destinationId", *castMessage.DestinationId,
+							"payloadType", "BINARY")
 					} else {
-						log.Info("received", "namespace", *castMessage.Namespace, "sourceId", *castMessage.SourceId, "destinationId", *castMessage.DestinationId, "payloadType", "STRING", "payloadUtf8", *castMessage.PayloadUtf8)
+						log.Info("received",
+							"namespace", *castMessage.Namespace,
+							"sourceId", *castMessage.SourceId,
+							"destinationId", *castMessage.DestinationId,
+							"payloadType", "STRING",
+							"payloadUtf8", *castMessage.PayloadUtf8)
 					}
 
 					if *castMessage.Namespace == deviceAuthNamespace {
