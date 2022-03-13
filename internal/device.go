@@ -194,6 +194,17 @@ func (device *Device) startApplication(appId string) error {
 	return nil
 }
 
+func (device *Device) stopApplication(sessionId string) error {
+	session := device.Sessions[sessionId]
+	if session == nil {
+		return errors.New("session does not exist")
+	}
+
+	delete(device.Sessions, sessionId)
+	session.Stop()
+	return nil
+}
+
 func NewDevice(deviceModel string, friendlyName string, id string) *Device {
 	log := NewLogger(fmt.Sprintf("device (%s)", id))
 

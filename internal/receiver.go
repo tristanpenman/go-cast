@@ -192,6 +192,8 @@ func (receiver *Receiver) handleStop(data string) {
 		return
 	}
 
+	receiver.device.stopApplication(request.SessionId)
+
 	receiver.handleGetStatus(request.RequestId)
 }
 

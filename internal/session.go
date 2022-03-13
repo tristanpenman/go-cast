@@ -20,6 +20,8 @@ type Session struct {
 	device      *Device
 	log         hclog.Logger
 	packetConn  net.PacketConn
+	stop        chan struct{}
+	stopping    bool
 	transportId string
 }
 
@@ -27,7 +29,7 @@ func (session *Session) GetPort() int {
 	return GetPort(session.packetConn.LocalAddr())
 }
 
-type webrtcMessage struct {
+type WebrtcMessage struct {
 	SeqNum uint32 `json:"seqNum"`
 	Type   string `json:"type"`
 }
@@ -47,7 +49,7 @@ type Offer struct {
 }
 
 type webrtcOfferMessage struct {
-	*webrtcMessage
+	*WebrtcMessage
 
 	Offer Offer `json:"offer"`
 }
@@ -88,7 +90,7 @@ type Answer struct {
 }
 
 type webrtcAnswerMessage struct {
-	*webrtcMessage
+	*WebrtcMessage
 
 	Answer Answer `json:"answer"`
 }
@@ -125,7 +127,7 @@ func (session *Session) handleWebrtcOffer(castMessage *cast.CastMessage) {
 	}
 
 	response := webrtcAnswerMessage{
-		webrtcMessage: &webrtcMessage{
+		WebrtcMessage: &WebrtcMessage{
 			Type: "ANSWER",
 		},
 		Answer: Answer{
@@ -166,7 +168,7 @@ func (session *Session) handleWebrtcOffer(castMessage *cast.CastMessage) {
 }
 
 func (session *Session) handleWebrtcMessage(castMessage *cast.CastMessage) {
-	var request webrtcMessage
+	var request WebrtcMessage
 	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &request)
 	if err != nil {
 		session.log.Error("failed to unmarshall webrtc message", "err", err)
@@ -208,6 +210,11 @@ func (session *Session) Namespaces() []string {
 	return namespaces
 }
 
+func (session *Session) Stop() {
+	session.stopping = true
+	close(session.stop)
+}
+
 func (session *Session) TransportId() string {
 	return session.transportId
 }
@@ -220,20 +227,15 @@ func NewSession(appId string, device *Device, displayName string, sessionId stri
 		return nil
 	}
 
+	stop := make(chan struct{})
 	go func() {
-		bytes := make([]byte, 1500)
-		for {
-			count, peer, err := packetConn.ReadFrom(bytes)
-			if err != nil {
-				log.Error(fmt.Sprintf("error while reading from socket: %d", err))
-				packetConn.Close()
-			}
-
-			log.Info("read %d from %s", count, peer.Network())
+		select {
+		case <-stop:
+			packetConn.Close()
 		}
 	}()
 
-	return &Session{
+	session := Session{
 		AppId:       appId,
 		DisplayName: displayName,
 		SessionId:   sessionId,
@@ -243,6 +245,30 @@ func NewSession(appId string, device *Device, displayName string, sessionId stri
 		device:      device,
 		log:         log,
 		packetConn:  packetConn,
+		stop:        stop,
+		stopping:    false,
 		transportId: transportId,
 	}
+
+	log.Info("listening on port", "port", GetPort(packetConn.LocalAddr()))
+
+	go func() {
+		bytes := make([]byte, 1500)
+		for {
+			count, peer, err := packetConn.ReadFrom(bytes)
+			if session.stopping {
+				log.Info("stopping udp listener")
+				break
+			} else if err != nil {
+				log.Error(fmt.Sprintf("error while reading from socket: %s", err))
+				break
+			}
+
+			log.Info("read %d from %s", count, peer.Network())
+		}
+
+		packetConn.Close()
+	}()
+
+	return &session
 }
