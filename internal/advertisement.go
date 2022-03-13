@@ -36,7 +36,7 @@ func NewAdvertisement(device *Device, hostname *string, port int) *Advertisement
 		fmt.Sprintf("fn=%s", device.FriendlyName),
 	}
 
-	service, err := mdns.NewMDNSService(device.Id, "_googlecast._tcp", "", "", port, nil, info)
+	service, err := mdns.NewMDNSService(device.Id, "_googlecast._tcp", "", *hostname, port, nil, info)
 	if err != nil {
 		log.Error("failed to create mdns service", "err", err)
 		return nil
