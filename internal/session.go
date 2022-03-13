@@ -35,6 +35,8 @@ type webrtcMessage struct {
 type SupportedStream struct {
 	AesIvMask string `json:"aesIvMask"`
 	AesKey    string `json:"aesKey"`
+	Index     int    `json:"index"`
+	Ssrc      int    `json:"ssrc"`
 	Type      string `json:"type"`
 }
 
@@ -50,7 +52,39 @@ type webrtcOfferMessage struct {
 	Offer Offer `json:"offer"`
 }
 
+type Audio struct {
+}
+
+type Video struct {
+	MaxDimensions *Dimensions `json:"maxDimensions"`
+	MinDimensions *Dimensions `json:"minDimensions"`
+}
+
+type Constraints struct {
+	Audio *Audio `json:"audio"`
+	Video *Video `json:"video"`
+}
+
+type Dimensions struct {
+	Width     uint   `json:"width"`
+	Height    uint   `json:"height"`
+	FrameRate string `json:"frameRate"`
+}
+
+type Display struct {
+	Dimensions  Dimensions `json:"dimensions"`
+	AspectRatio string     `json:"aspectRatio"`
+	Scaling     string     `json:"scaling"`
+}
+
 type Answer struct {
+	CastMode          string      `json:"castMode"`
+	UdpPort           int         `json:"udpPort"`
+	SendIndexes       []int       `json:"sendIndexes"`
+	Ssrcs             []int       `json:"ssrcs"`
+	Constraints       Constraints `json:"constraints"`
+	Display           Display     `json:"display"`
+	ReceiverGetStatus bool        `json:"receiverGetStatus"`
 }
 
 type webrtcAnswerMessage struct {
@@ -80,12 +114,44 @@ func (session *Session) handleWebrtcOffer(castMessage *cast.CastMessage) {
 		return
 	}
 
+	var sendIndexes []int
+	var ssrcs []int
+
+	for _, supportedStream := range request.Offer.SupportedStreams {
+		if supportedStream.Type == "video_source" {
+			sendIndexes = append(sendIndexes, supportedStream.Index)
+			ssrcs = append(ssrcs, supportedStream.Ssrc)
+		}
+	}
+
 	response := webrtcAnswerMessage{
 		webrtcMessage: &webrtcMessage{
 			Type: "ANSWER",
 		},
 		Answer: Answer{
-			// TODO
+			CastMode:    request.Offer.CastMode,
+			UdpPort:     session.GetPort(),
+			SendIndexes: sendIndexes,
+			Ssrcs:       ssrcs,
+			Constraints: Constraints{
+				Video: &Video{
+					MaxDimensions: &Dimensions{
+						Width:     640,
+						Height:    360,
+						FrameRate: "60",
+					},
+				},
+			},
+			Display: Display{
+				Dimensions: Dimensions{
+					Width:     640,
+					Height:    360,
+					FrameRate: "60",
+				},
+				AspectRatio: "16:9",
+				Scaling:     "sender",
+			},
+			ReceiverGetStatus: request.Offer.ReceiverGetStatus,
 		},
 	}
 
