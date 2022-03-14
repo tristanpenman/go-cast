@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
+
 	. "github.com/tristanpenman/go-cast/internal"
 )
 
@@ -86,8 +88,8 @@ func main() {
 
 	// TODO: generate this dynamically and/or allow it to be set on the command line
 	id := "a98a257b4a3dd84392a34bd0"
-
-	device := NewDevice(*deviceModel, *friendlyName, id)
+	udn := uuid.New().String()
+	device := NewDevice(*deviceModel, *friendlyName, id, udn)
 
 	server := NewServer(device, manifest, clientPrefix, iface, hostname, *port, *relayHost, *relayPort, *relayAuthChallenge, &wg)
 	if server == nil {

@@ -29,6 +29,7 @@ type Device struct {
 	FriendlyName  string
 	Id            string
 	Sessions      map[string]*Session
+	Udn           string
 
 	// implementation
 	log        hclog.Logger
@@ -205,7 +206,7 @@ func (device *Device) stopApplication(sessionId string) error {
 	return nil
 }
 
-func NewDevice(deviceModel string, friendlyName string, id string) *Device {
+func NewDevice(deviceModel string, friendlyName string, id string, udn string) *Device {
 	log := NewLogger(fmt.Sprintf("device (%s)", id))
 
 	// Allow clients to start Android or Chrome mirroring apps
@@ -219,6 +220,7 @@ func NewDevice(deviceModel string, friendlyName string, id string) *Device {
 		FriendlyName:  friendlyName,
 		Id:            id,
 		Sessions:      map[string]*Session{},
+		Udn:           udn,
 
 		// implementation
 		log:        log,

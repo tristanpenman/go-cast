@@ -253,6 +253,65 @@ func (receiver *Receiver) handleHeartbeatMessage(castMessage *cast.CastMessage) 
 	receiver.device.sendUtf8(heartbeatNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
 }
 
+type setupMessage struct {
+	RequestId int    `json:"request_id"`
+	Type      string `json:"type"`
+}
+
+type setupResponseDeviceInfo struct {
+	SsdpUdn string `json:"ssdp_udn"`
+}
+
+type setupResponseData struct {
+	DeviceInfo setupResponseDeviceInfo `json:"deviceInfo"`
+	Name       string                  `json:"Name"`
+	Version    int                     `json:"version"`
+}
+
+type setupResponse struct {
+	*setupMessage
+
+	Data setupResponseData
+}
+
+func (receiver *Receiver) handleSetupMessage(castMessage *cast.CastMessage) {
+	var message setupMessage
+	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &message)
+	if err != nil {
+		receiver.log.Error("failed to parse setup message", "err", err)
+		return
+	}
+
+	if message.Type != "eureka_info" {
+		receiver.log.Error("received unexpected setup message type", "type", message.Type)
+		return
+	}
+
+	response := setupResponse{
+		setupMessage: &setupMessage{
+			RequestId: message.RequestId,
+			Type:      "eureka_info",
+		},
+		Data: setupResponseData{
+			DeviceInfo: setupResponseDeviceInfo{
+				SsdpUdn: receiver.device.Udn,
+			},
+			Name:    receiver.device.FriendlyName,
+			Version: 8,
+		},
+	}
+
+	// turn the message into a pong message
+	bytes, err := json.Marshal(response)
+	if err != nil {
+		receiver.log.Error("failed to marshall setup response")
+		return
+	}
+
+	payloadUtf8 := string(bytes)
+	receiver.device.sendUtf8(setupNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
+}
+
 func (receiver *Receiver) HandleCastMessage(castMessage *cast.CastMessage) {
 	switch *castMessage.Namespace {
 	case heartbeatNamespace:
@@ -260,6 +319,9 @@ func (receiver *Receiver) HandleCastMessage(castMessage *cast.CastMessage) {
 		return
 	case receiverNamespace:
 		receiver.handleReceiverMessage(castMessage)
+		return
+	case setupNamespace:
+		receiver.handleSetupMessage(castMessage)
 		return
 	default:
 		receiver.log.Info("received message for unknown namespace", "namespace", *castMessage.Namespace)
