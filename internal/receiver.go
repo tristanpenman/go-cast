@@ -10,9 +10,10 @@ import (
 )
 
 type Receiver struct {
-	device *Device
-	id     string
-	log    hclog.Logger
+	clientId int
+	device   *Device
+	id       string
+	log      hclog.Logger
 }
 
 type ReceiverMessage struct {
@@ -170,7 +171,7 @@ func (receiver *Receiver) handleLaunch(data string) {
 		return
 	}
 
-	err = receiver.device.startApplication(request.AppId)
+	err = receiver.device.startApplication(request.AppId, receiver.clientId)
 	if err != nil {
 		receiver.log.Error("failed to start application", "err", err)
 	}
@@ -263,15 +264,18 @@ type setupResponseDeviceInfo struct {
 }
 
 type setupResponseData struct {
-	DeviceInfo setupResponseDeviceInfo `json:"deviceInfo"`
-	Name       string                  `json:"Name"`
+	DeviceInfo setupResponseDeviceInfo `json:"device_info"`
+	Name       string                  `json:"name"`
 	Version    int                     `json:"version"`
 }
 
 type setupResponse struct {
 	*setupMessage
 
-	Data setupResponseData
+	Data setupResponseData `json:"data"`
+
+	ResponseCode   int    `json:"response_code"`
+	ResponseString string `json:"response_string"`
 }
 
 func (receiver *Receiver) handleSetupMessage(castMessage *cast.CastMessage) {
@@ -299,6 +303,8 @@ func (receiver *Receiver) handleSetupMessage(castMessage *cast.CastMessage) {
 			Name:    receiver.device.FriendlyName,
 			Version: 8,
 		},
+		ResponseCode:   200,
+		ResponseString: "OK",
 	}
 
 	// turn the message into a pong message
@@ -332,12 +338,13 @@ func (receiver *Receiver) TransportId() string {
 	return receiver.id
 }
 
-func NewReceiver(device *Device, id string) *Receiver {
-	log := NewLogger(fmt.Sprintf("receiver (%s)", id))
+func NewReceiver(device *Device, id string, clientId int) *Receiver {
+	log := NewLogger(fmt.Sprintf("receiver (%d) [%s]", clientId, id))
 
 	return &Receiver{
-		device: device,
-		id:     id,
-		log:    log,
+		clientId: clientId,
+		device:   device,
+		id:       id,
+		log:      log,
 	}
 }

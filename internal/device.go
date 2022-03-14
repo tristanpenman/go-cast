@@ -154,27 +154,27 @@ func (device *Device) sendUtf8(namespace string, payloadUtf8 *string, sourceId s
 	}
 }
 
-func (device *Device) startAndroidMirroringSession() {
+func (device *Device) startAndroidMirroringSession(clientId int) {
 	transportId := fmt.Sprintf("pid-%d", device.nextPid)
 	device.nextPid++
 
-	session := NewSession(androidMirroringAppId, device, "Android Mirroring", uuid.New().String(), transportId)
+	session := NewSession(androidMirroringAppId, clientId, device, "Android Mirroring", uuid.New().String(), transportId)
 
 	device.Sessions[session.SessionId] = session
 	device.registerTransport(session)
 }
 
-func (device *Device) startChromeMirroringSession() {
+func (device *Device) startChromeMirroringSession(clientId int) {
 	transportId := fmt.Sprintf("pid-%d", device.nextPid)
 	device.nextPid++
 
-	session := NewSession(chromeMirroringAppId, device, "Chrome Mirroring", uuid.New().String(), transportId)
+	session := NewSession(chromeMirroringAppId, clientId, device, "Chrome Mirroring", uuid.New().String(), transportId)
 
 	device.Sessions[session.SessionId] = session
 	device.registerTransport(session)
 }
 
-func (device *Device) startApplication(appId string) error {
+func (device *Device) startApplication(appId string, clientId int) error {
 	for _, session := range device.Sessions {
 		if session.AppId == appId {
 			return errors.New("application already started")
@@ -183,10 +183,10 @@ func (device *Device) startApplication(appId string) error {
 
 	switch appId {
 	case androidMirroringAppId:
-		device.startAndroidMirroringSession()
+		device.startAndroidMirroringSession(clientId)
 		break
 	case chromeMirroringAppId:
-		device.startChromeMirroringSession()
+		device.startChromeMirroringSession(clientId)
 		break
 	default:
 		return errors.New("unsupported app")

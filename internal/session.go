@@ -55,6 +55,11 @@ type webrtcOfferMessage struct {
 }
 
 type Audio struct {
+	MaxSampleRate int `json:"maxSampleRate"`
+	MaxChannels   int `json:"maxChannels"`
+	MinBitRate    int `json:"minBitRate"`
+	MaxBitRate    int `json:"maxBitRate"`
+	MaxDelay      int `json:"maxDelay"`
 }
 
 type Video struct {
@@ -80,19 +85,19 @@ type Display struct {
 }
 
 type Answer struct {
-	CastMode          string      `json:"castMode"`
-	UdpPort           int         `json:"udpPort"`
-	SendIndexes       []int       `json:"sendIndexes"`
-	Ssrcs             []int       `json:"ssrcs"`
-	Constraints       Constraints `json:"constraints"`
-	Display           Display     `json:"display"`
-	ReceiverGetStatus bool        `json:"receiverGetStatus"`
+	CastMode             string `json:"castMode"`
+	ReceiverGetStatus    bool   `json:"receiverGetStatus"`
+	ReceiverRtcpEventLog []int  `json:"receiverRtcpEventLog"`
+	SendIndexes          []int  `json:"sendIndexes"`
+	Ssrcs                []int  `json:"ssrcs"`
+	UdpPort              int    `json:"udpPort"`
 }
 
 type webrtcAnswerMessage struct {
 	*WebrtcMessage
 
 	Answer Answer `json:"answer"`
+	Result string `json:"result"`
 }
 
 func (session *Session) handleGenericMessage(castMessage *cast.CastMessage) {
@@ -116,11 +121,13 @@ func (session *Session) handleWebrtcOffer(castMessage *cast.CastMessage) {
 		return
 	}
 
+	var receiverRtcpEventLog []int
 	var sendIndexes []int
 	var ssrcs []int
 
 	for _, supportedStream := range request.Offer.SupportedStreams {
 		if supportedStream.Type == "video_source" {
+			receiverRtcpEventLog = append(receiverRtcpEventLog, supportedStream.Index)
 			sendIndexes = append(sendIndexes, supportedStream.Index)
 			ssrcs = append(ssrcs, supportedStream.Ssrc)
 		}
@@ -128,33 +135,18 @@ func (session *Session) handleWebrtcOffer(castMessage *cast.CastMessage) {
 
 	response := webrtcAnswerMessage{
 		WebrtcMessage: &WebrtcMessage{
-			Type: "ANSWER",
+			SeqNum: request.SeqNum,
+			Type:   "ANSWER",
 		},
 		Answer: Answer{
-			CastMode:    request.Offer.CastMode,
-			UdpPort:     session.GetPort(),
-			SendIndexes: sendIndexes,
-			Ssrcs:       ssrcs,
-			Constraints: Constraints{
-				Video: &Video{
-					MaxDimensions: &Dimensions{
-						Width:     640,
-						Height:    360,
-						FrameRate: "60",
-					},
-				},
-			},
-			Display: Display{
-				Dimensions: Dimensions{
-					Width:     640,
-					Height:    360,
-					FrameRate: "60",
-				},
-				AspectRatio: "16:9",
-				Scaling:     "sender",
-			},
-			ReceiverGetStatus: request.Offer.ReceiverGetStatus,
+			CastMode:             request.Offer.CastMode,
+			ReceiverGetStatus:    request.Offer.ReceiverGetStatus,
+			ReceiverRtcpEventLog: receiverRtcpEventLog,
+			SendIndexes:          sendIndexes,
+			Ssrcs:                ssrcs,
+			UdpPort:              session.GetPort(),
 		},
+		Result: "ok",
 	}
 
 	bytes, err := json.Marshal(&response)
@@ -219,8 +211,8 @@ func (session *Session) TransportId() string {
 	return session.transportId
 }
 
-func NewSession(appId string, device *Device, displayName string, sessionId string, transportId string) *Session {
-	log := NewLogger(fmt.Sprintf("session (%s)", sessionId))
+func NewSession(appId string, clientId int, device *Device, displayName string, sessionId string, transportId string) *Session {
+	log := NewLogger(fmt.Sprintf("session (%d) [%s]", clientId, sessionId))
 
 	packetConn, err := net.ListenPacket("udp", ":0")
 	if err != nil {

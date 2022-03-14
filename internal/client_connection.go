@@ -124,7 +124,7 @@ func NewClientConnection(
 	}
 
 	if relayClient == nil {
-		receiver := NewReceiver(device, "receiver-0")
+		receiver := NewReceiver(device, "receiver-0", clientConnection.id)
 		device.registerTransport(receiver)
 		device.registerSubscription(&clientConnection, "sender-0", "receiver-0")
 	}
