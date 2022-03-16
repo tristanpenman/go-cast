@@ -16,25 +16,40 @@ type Receiver struct {
 	log      hclog.Logger
 }
 
+// ================================================================================================
+//
+// Receiver namespace
+//
+// Incoming:
+//   - GET_APP_AVAILABILITY
+//   - GET_STATUS
+//   - LAUNCH
+//   - STOP
+//
+// Outgoing:
+//   - GET_APP_AVAILABILITY
+//   - RECEIVER_STATUS
+//
+
 type ReceiverMessage struct {
 	RequestId int    `json:"requestId"`
 	Type      string `json:"type"`
 }
 
-type getAppAvailabilityRequest struct {
+type GetAppAvailabilityRequest struct {
 	*ReceiverMessage
 
 	AppId []string `json:"appId"`
 }
 
-type getAppAvailabilityResponse struct {
+type GetAppAvailabilityResponse struct {
 	*ReceiverMessage
 
 	Availability map[string]string `json:"availability"`
 }
 
 func (receiver *Receiver) handleGetAppAvailability(data string) {
-	var request getAppAvailabilityRequest
+	var request GetAppAvailabilityRequest
 	err := json.Unmarshal([]byte(data), &request)
 	if err != nil {
 		receiver.log.Error("failed to connect data", "err", err)
@@ -51,11 +66,11 @@ func (receiver *Receiver) handleGetAppAvailability(data string) {
 		}
 	}
 
-	response := getAppAvailabilityResponse{
+	response := GetAppAvailabilityResponse{
 		Availability: availability,
 		ReceiverMessage: &ReceiverMessage{
 			RequestId: request.RequestId,
-			Type:      request.Type,
+			Type:      "GET_APP_AVAILABILITY",
 		},
 	}
 
@@ -70,7 +85,7 @@ func (receiver *Receiver) handleGetAppAvailability(data string) {
 	receiver.device.broadcastUtf8(receiverNamespace, &payloadUtf8, receiver.id)
 }
 
-type volume struct {
+type Volume struct {
 	Level float32 `json:"level"`
 	Muted bool    `json:"muted"`
 }
@@ -92,10 +107,10 @@ type Application struct {
 type Status struct {
 	Applications  []Application `json:"applications"`
 	IsActiveInput bool          `json:"isActiveInput"`
-	Volume        volume        `json:"volume"`
+	Volume        Volume        `json:"volume"`
 }
 
-type getStatusResponse struct {
+type GetStatusResponse struct {
 	*ReceiverMessage
 
 	Status Status `json:"status"`
@@ -132,7 +147,7 @@ func marshallApplicationStatuses(sessions map[string]*Session) []Application {
 }
 
 func (receiver *Receiver) handleGetStatus(requestId int) {
-	response := getStatusResponse{
+	response := GetStatusResponse{
 		ReceiverMessage: &ReceiverMessage{
 			RequestId: requestId,
 			Type:      "RECEIVER_STATUS",
@@ -140,7 +155,7 @@ func (receiver *Receiver) handleGetStatus(requestId int) {
 		Status: Status{
 			Applications:  marshallApplicationStatuses(receiver.device.Sessions),
 			IsActiveInput: true,
-			Volume: volume{
+			Volume: Volume{
 				Level: 1.0,
 				Muted: false,
 			},
@@ -225,8 +240,24 @@ func (receiver *Receiver) handleReceiverMessage(castMessage *cast.CastMessage) {
 	}
 }
 
+// ================================================================================================
+//
+// Discovery namespace
+//
+// Incoming:
+//   - GET_DEVICE_INFO
+//
+// Outgoing:
+//   - DEVICE_INFO
+//
+
+type DiscoveryMessage struct {
+	RequestId int    `json:"requestId"`
+	Type      string `json:"type"`
+}
+
 type DeviceInfoResponse struct {
-	*ReceiverMessage
+	DiscoveryMessage *DiscoveryMessage
 
 	ControlNotifications int    `json:"controlNotifications"`
 	DeviceCapabilities   int    `json:"deviceCapabilities"`
@@ -252,7 +283,7 @@ func (receiver *Receiver) handleDiscoveryMessage(castMessage *cast.CastMessage) 
 	}
 
 	response := DeviceInfoResponse{
-		ReceiverMessage: &ReceiverMessage{
+		DiscoveryMessage: &DiscoveryMessage{
 			RequestId: message.RequestId,
 			Type:      "DEVICE_INFO",
 		},
@@ -275,6 +306,17 @@ func (receiver *Receiver) handleDiscoveryMessage(castMessage *cast.CastMessage) 
 	payloadUtf8 := string(bytes)
 	receiver.device.sendUtf8(discoveryNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
 }
+
+// ================================================================================================
+//
+// Heartbeat namespace
+//
+// Incoming:
+//   - PING
+//
+// Outgoing
+//   - PONG
+//
 
 type heartbeatMessage struct {
 	Type string `json:"type"`
@@ -305,32 +347,42 @@ func (receiver *Receiver) handleHeartbeatMessage(castMessage *cast.CastMessage) 
 	receiver.device.sendUtf8(heartbeatNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
 }
 
-type setupMessage struct {
+// ================================================================================================
+//
+// Setup namespace
+//
+// Incoming:
+//   - eureka_info
+//
+// Outgoing:
+//   - eureka_info
+//
+
+type SetupMessage struct {
 	RequestId int    `json:"request_id"`
 	Type      string `json:"type"`
 }
 
-type setupResponseDeviceInfo struct {
+type SetupDeviceInfo struct {
 	SsdpUdn string `json:"ssdp_udn"`
 }
 
-type setupResponseData struct {
-	DeviceInfo setupResponseDeviceInfo `json:"device_info"`
-	Name       string                  `json:"name"`
-	Version    int                     `json:"version"`
+type SetupData struct {
+	DeviceInfo SetupDeviceInfo `json:"device_info"`
+	Name       string          `json:"name"`
+	Version    int             `json:"version"`
 }
 
-type setupResponse struct {
-	*setupMessage
+type SetupResponse struct {
+	*SetupMessage
 
-	Data setupResponseData `json:"data"`
-
-	ResponseCode   int    `json:"response_code"`
-	ResponseString string `json:"response_string"`
+	Data           SetupData `json:"data"`
+	ResponseCode   int       `json:"response_code"`
+	ResponseString string    `json:"response_string"`
 }
 
 func (receiver *Receiver) handleSetupMessage(castMessage *cast.CastMessage) {
-	var message setupMessage
+	var message SetupMessage
 	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &message)
 	if err != nil {
 		receiver.log.Error("failed to parse setup message", "err", err)
@@ -342,13 +394,13 @@ func (receiver *Receiver) handleSetupMessage(castMessage *cast.CastMessage) {
 		return
 	}
 
-	response := setupResponse{
-		setupMessage: &setupMessage{
+	response := SetupResponse{
+		SetupMessage: &SetupMessage{
 			RequestId: message.RequestId,
 			Type:      "eureka_info",
 		},
-		Data: setupResponseData{
-			DeviceInfo: setupResponseDeviceInfo{
+		Data: SetupData{
+			DeviceInfo: SetupDeviceInfo{
 				SsdpUdn: receiver.device.Udn,
 			},
 			Name:    receiver.device.FriendlyName,
@@ -368,6 +420,11 @@ func (receiver *Receiver) handleSetupMessage(castMessage *cast.CastMessage) {
 	payloadUtf8 := string(bytes)
 	receiver.device.sendUtf8(setupNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
 }
+
+// ================================================================================================
+//
+// CastTransport interface
+//
 
 func (receiver *Receiver) HandleCastMessage(castMessage *cast.CastMessage) {
 	switch *castMessage.Namespace {
@@ -391,6 +448,11 @@ func (receiver *Receiver) HandleCastMessage(castMessage *cast.CastMessage) {
 func (receiver *Receiver) TransportId() string {
 	return receiver.id
 }
+
+// ================================================================================================
+//
+// Constructor
+//
 
 func NewReceiver(device *Device, id string, clientId int) *Receiver {
 	log := NewLogger(fmt.Sprintf("receiver (%d) [%s]", clientId, id))
