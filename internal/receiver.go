@@ -225,6 +225,57 @@ func (receiver *Receiver) handleReceiverMessage(castMessage *cast.CastMessage) {
 	}
 }
 
+type DeviceInfoResponse struct {
+	*ReceiverMessage
+
+	ControlNotifications int    `json:"controlNotifications"`
+	DeviceCapabilities   int    `json:"deviceCapabilities"`
+	DeviceIconUrl        string `json:"deviceIconUrl"`
+	DeviceId             string `json:"deviceId"`
+	DeviceModel          string `json:"deviceModel"`
+	FriendlyName         string `json:"friendlyName"`
+	ReceiverMetricsId    string `json:"receiverMetricsId"`
+	WifiProximityId      string `json:"wifiProximityId"`
+}
+
+func (receiver *Receiver) handleDiscoveryMessage(castMessage *cast.CastMessage) {
+	var message ReceiverMessage
+	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &message)
+	if err != nil {
+		receiver.log.Error("failed to unmarshall discovery request")
+		return
+	}
+
+	if message.Type != "GET_DEVICE_INFO" {
+		receiver.log.Error("received unexpected discovery message type", "type", message.Type)
+		return
+	}
+
+	response := DeviceInfoResponse{
+		ReceiverMessage: &ReceiverMessage{
+			RequestId: message.RequestId,
+			Type:      "DEVICE_INFO",
+		},
+		ControlNotifications: 1,
+		DeviceCapabilities:   4101,
+		DeviceIconUrl:        "/setup/icon.png",
+		DeviceId:             receiver.device.Id,
+		DeviceModel:          receiver.device.DeviceModel,
+		FriendlyName:         receiver.device.FriendlyName,
+		ReceiverMetricsId:    "",
+		WifiProximityId:      "",
+	}
+
+	bytes, err := json.Marshal(response)
+	if err != nil {
+		receiver.log.Error("failed to marshall discovery response")
+		return
+	}
+
+	payloadUtf8 := string(bytes)
+	receiver.device.sendUtf8(discoveryNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
+}
+
 type heartbeatMessage struct {
 	Type string `json:"type"`
 }
@@ -233,7 +284,7 @@ func (receiver *Receiver) handleHeartbeatMessage(castMessage *cast.CastMessage) 
 	var message heartbeatMessage
 	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &message)
 	if err != nil {
-		receiver.log.Error("failed to parse certificate manifest file", "err", err)
+		receiver.log.Error("failed to unmarshall heartbeat request", "err", err)
 		return
 	}
 
@@ -322,6 +373,9 @@ func (receiver *Receiver) HandleCastMessage(castMessage *cast.CastMessage) {
 	switch *castMessage.Namespace {
 	case heartbeatNamespace:
 		receiver.handleHeartbeatMessage(castMessage)
+		return
+	case discoveryNamespace:
+		receiver.handleDiscoveryMessage(castMessage)
 		return
 	case receiverNamespace:
 		receiver.handleReceiverMessage(castMessage)
