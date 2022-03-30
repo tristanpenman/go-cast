@@ -12,7 +12,7 @@ import (
 )
 
 type Client struct {
-	castChannel cast.CastChannel
+	castChannel CastChannel
 	conn        net.Conn
 	log         hclog.Logger
 	Incoming    chan *cast.CastMessage
@@ -33,7 +33,7 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 
 	log.Info("Connected")
 
-	castChannel := cast.CreateCastChannel(conn, log)
+	castChannel := CreateCastChannel(conn, log)
 
 	client := Client{
 		castChannel: castChannel,

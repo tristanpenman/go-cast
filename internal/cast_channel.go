@@ -1,4 +1,4 @@
-package cast
+package internal
 
 import (
 	"encoding/binary"
@@ -7,16 +7,18 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/go-hclog"
+
+	"github.com/tristanpenman/go-cast/internal/cast"
 )
 
 type CastChannel struct {
 	conn     net.Conn
 	log      hclog.Logger
-	Messages chan *CastMessage
+	Messages chan *cast.CastMessage
 }
 
 func CreateCastChannel(conn net.Conn, log hclog.Logger) CastChannel {
-	messages := make(chan *CastMessage)
+	messages := make(chan *cast.CastMessage)
 
 	go func() {
 		for {
@@ -54,7 +56,7 @@ func CreateCastChannel(conn net.Conn, log hclog.Logger) CastChannel {
 				log.Debug(fmt.Sprintf("Read: %d", n))
 			}
 
-			var castMessage CastMessage
+			var castMessage cast.CastMessage
 			err = proto.Unmarshal(msgBytes[:n], &castMessage)
 			if err != nil {
 				log.Error("failed to parse message", "err", err)
@@ -78,7 +80,7 @@ func CreateCastChannel(conn net.Conn, log hclog.Logger) CastChannel {
 	}
 }
 
-func (castChannel *CastChannel) Send(castMessage *CastMessage) bool {
+func (castChannel *CastChannel) Send(castMessage *cast.CastMessage) bool {
 	msgBytes, err := proto.Marshal(castMessage)
 	if err != nil {
 		castChannel.log.Error("failed to encode binary cast message", "err", err)

@@ -11,7 +11,7 @@ import (
 )
 
 type ClientConnection struct {
-	castChannel cast.CastChannel
+	castChannel CastChannel
 	conn        net.Conn
 	device      *Device
 	id          int
@@ -111,7 +111,7 @@ func NewClientConnection(
 ) *ClientConnection {
 	log := NewLogger(fmt.Sprintf("client-connection (%d)", id))
 
-	castChannel := cast.CreateCastChannel(conn, log)
+	castChannel := CreateCastChannel(conn, log)
 
 	clientConnection := ClientConnection{
 		castChannel: castChannel,
