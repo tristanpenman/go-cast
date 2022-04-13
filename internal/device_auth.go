@@ -10,6 +10,13 @@ import (
 )
 
 func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cast.CastMessage, manifest map[string]string) {
+	var deviceAuthMessage cast.DeviceAuthMessage
+	err := proto.Unmarshal(message.PayloadBinary, &deviceAuthMessage)
+	if err != nil {
+		clientConnection.log.Error("failed to parse device auth messsage", "err", err)
+		return
+	}
+
 	// intermediate and platform certs are in PEM format
 	// TODO: check that we don't have any remaining data in `rest`
 	ica, _ := pem.Decode([]byte(manifest["ica"]))
@@ -24,7 +31,7 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cas
 
 	hashAlgorithm := cast.HashAlgorithm_SHA256
 
-	deviceAuthMessage := &cast.DeviceAuthMessage{
+	deviceAuthMessage = cast.DeviceAuthMessage{
 		Response: &cast.AuthResponse{
 			Signature:               sig,
 			ClientAuthCertificate:   platform.Bytes,
@@ -33,7 +40,7 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cas
 		},
 	}
 
-	payloadBinary, err := proto.Marshal(deviceAuthMessage)
+	payloadBinary, err := proto.Marshal(&deviceAuthMessage)
 	if err != nil {
 		clientConnection.log.Error("failed to encode device auth response", "err", err)
 		return
