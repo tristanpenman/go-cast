@@ -31,8 +31,10 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cas
 
 	hashAlgorithm := cast.HashAlgorithm_SHA256
 
+	crl := make([]byte, 0)
 	deviceAuthMessage = cast.DeviceAuthMessage{
 		Response: &cast.AuthResponse{
+			Crl:                     crl,
 			Signature:               sig,
 			ClientAuthCertificate:   platform.Bytes,
 			IntermediateCertificate: intermediateCertificate,
