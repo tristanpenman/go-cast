@@ -13,7 +13,7 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cas
 	var deviceAuthMessage cast.DeviceAuthMessage
 	err := proto.Unmarshal(message.PayloadBinary, &deviceAuthMessage)
 	if err != nil {
-		clientConnection.log.Error("failed to parse device auth messsage", "err", err)
+		clientConnection.log.Error("failed to parse device auth message", "err", err)
 		return
 	}
 
