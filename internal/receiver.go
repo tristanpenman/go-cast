@@ -3,8 +3,6 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/tristanpenman/go-cast/internal/cast"
 )
@@ -56,13 +54,14 @@ func (receiver *Receiver) handleGetAppAvailability(data string) {
 		return
 	}
 
-	availableApps := receiver.device.AvailableApps
 	availability := make(map[string]string)
 	for _, appId := range request.AppId {
-		if sort.SearchStrings(availableApps, appId) < len(availableApps) {
-			availability[appId] = "APP_AVAILABLE"
-		} else {
-			availability[appId] = "APP_UNAVAILABLE"
+		availability[appId] = "APP_UNAVAILABLE"
+		for _, availableAppId := range receiver.device.AvailableApps {
+			if appId == availableAppId {
+				availability[appId] = "APP_AVAILABLE"
+				break
+			}
 		}
 	}
 
@@ -257,7 +256,7 @@ type DiscoveryMessage struct {
 }
 
 type DeviceInfoResponse struct {
-	DiscoveryMessage *DiscoveryMessage
+	*DiscoveryMessage
 
 	ControlNotifications int    `json:"controlNotifications"`
 	DeviceCapabilities   int    `json:"deviceCapabilities"`
@@ -289,7 +288,7 @@ func (receiver *Receiver) handleDiscoveryMessage(castMessage *cast.CastMessage) 
 		},
 		ControlNotifications: 1,
 		DeviceCapabilities:   4101,
-		DeviceIconUrl:        "/setup/icon.png",
+		DeviceIconUrl:        "",
 		DeviceId:             receiver.device.Id,
 		DeviceModel:          receiver.device.DeviceModel,
 		FriendlyName:         receiver.device.FriendlyName,
