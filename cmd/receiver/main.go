@@ -55,7 +55,6 @@ func main() {
 	var enableMdns = flag.Bool("enable-mdns", false, "advertise service using mDNS")
 	var fixNewlines = flag.Bool("fix-newlines", false, "fix newline characters in manifest file")
 	var friendlyName = flag.String("friendly-name", "GoCast Receiver", "friendly name")
-	var hostname = flag.String("hostname", "", "override default OS hostname (optional)")
 	var iface = flag.String("iface", "", "interface to listen on (optional)")
 	var port = flag.Int("port", 8009, "port to listen on")
 	var relayAuthChallenge = flag.Bool("relay-auth-challenge", false, "send auth challenge when relaying")
@@ -76,7 +75,6 @@ func main() {
 		"enable-mdns", *enableMdns,
 		"fix-newlines", *fixNewlines,
 		"friendly-name", *friendlyName,
-		"hostname", *hostname,
 		"iface", *iface,
 		"port", *port,
 		"relay-auth-challenge", *relayAuthChallenge,
@@ -93,14 +91,14 @@ func main() {
 	udn := id
 	device := NewDevice(*deviceModel, *friendlyName, id, udn)
 
-	server := NewServer(device, manifest, clientPrefix, iface, hostname, *port, *relayHost, *relayPort, *relayAuthChallenge, &wg)
+	server := NewServer(device, manifest, clientPrefix, iface, *port, *relayHost, *relayPort, *relayAuthChallenge, &wg)
 	if server == nil {
 		return
 	}
 
 	var advertisement *Advertisement
 	if *enableMdns {
-		advertisement = NewAdvertisement(device, hostname, *port)
+		advertisement = NewAdvertisement(device, *port)
 		if advertisement == nil {
 			log.Error("failed to advertise receiver")
 		}

@@ -2,8 +2,6 @@ package internal
 
 import (
 	"context"
-	"os"
-
 	"github.com/brutella/dnssd"
 	"github.com/hashicorp/go-hclog"
 )
@@ -20,13 +18,10 @@ func (advertisement *Advertisement) Stop() {
 	advertisement.log.Info("stopped")
 }
 
-func NewAdvertisement(device *Device, hostname *string, port int) *Advertisement {
+func NewAdvertisement(device *Device, port int) *Advertisement {
 	var log = NewLogger("advertisement")
 
 	log.Info("starting mdns...")
-	if hostname == nil {
-		*hostname, _ = os.Hostname()
-	}
 
 	info := map[string]string{
 		"cd": "",
@@ -71,11 +66,15 @@ func NewAdvertisement(device *Device, hostname *string, port int) *Advertisement
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() {
-		responder.Respond(ctx)
-	}()
 
-	log.Info("started")
+	log.Info("starting")
+
+	go func() {
+		err := responder.Respond(ctx)
+		if err != nil {
+			log.Error("failed to start responder", "err", err)
+		}
+	}()
 
 	return &Advertisement{
 		cancel:    cancel,

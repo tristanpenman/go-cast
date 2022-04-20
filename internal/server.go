@@ -24,7 +24,6 @@ func NewServer(
 	manifest map[string]string,
 	clientPrefix *string,
 	iface *string,
-	hostname *string,
 	port int,
 	relayHost string,
 	relayPort uint,
