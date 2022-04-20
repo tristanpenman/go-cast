@@ -3,8 +3,10 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/hashicorp/go-hclog"
-	"github.com/tristanpenman/go-cast/internal/cast"
+
+	"github.com/tristanpenman/go-cast/internal/channel"
 )
 
 type Receiver struct {
@@ -212,7 +214,7 @@ func (receiver *Receiver) handleStop(data string) {
 	receiver.handleGetStatus(request.RequestId)
 }
 
-func (receiver *Receiver) handleReceiverMessage(castMessage *cast.CastMessage) {
+func (receiver *Receiver) handleReceiverMessage(castMessage *channel.CastMessage) {
 	var parsed ReceiverMessage
 	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &parsed)
 	if err != nil {
@@ -268,7 +270,7 @@ type DeviceInfoResponse struct {
 	WifiProximityId      string `json:"wifiProximityId"`
 }
 
-func (receiver *Receiver) handleDiscoveryMessage(castMessage *cast.CastMessage) {
+func (receiver *Receiver) handleDiscoveryMessage(castMessage *channel.CastMessage) {
 	var message ReceiverMessage
 	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &message)
 	if err != nil {
@@ -321,7 +323,7 @@ type heartbeatMessage struct {
 	Type string `json:"type"`
 }
 
-func (receiver *Receiver) handleHeartbeatMessage(castMessage *cast.CastMessage) {
+func (receiver *Receiver) handleHeartbeatMessage(castMessage *channel.CastMessage) {
 	var message heartbeatMessage
 	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &message)
 	if err != nil {
@@ -380,7 +382,7 @@ type SetupResponse struct {
 	ResponseString string    `json:"response_string"`
 }
 
-func (receiver *Receiver) handleSetupMessage(castMessage *cast.CastMessage) {
+func (receiver *Receiver) handleSetupMessage(castMessage *channel.CastMessage) {
 	var message SetupMessage
 	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &message)
 	if err != nil {
@@ -425,7 +427,7 @@ func (receiver *Receiver) handleSetupMessage(castMessage *cast.CastMessage) {
 // CastTransport interface
 //
 
-func (receiver *Receiver) HandleCastMessage(castMessage *cast.CastMessage) {
+func (receiver *Receiver) HandleCastMessage(castMessage *channel.CastMessage) {
 	switch *castMessage.Namespace {
 	case heartbeatNamespace:
 		receiver.handleHeartbeatMessage(castMessage)

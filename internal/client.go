@@ -8,14 +8,14 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/tristanpenman/go-cast/internal/cast"
+	"github.com/tristanpenman/go-cast/internal/channel"
 )
 
 type Client struct {
 	castChannel CastChannel
 	conn        net.Conn
 	log         hclog.Logger
-	Incoming    chan *cast.CastMessage
+	Incoming    chan *channel.CastMessage
 }
 
 func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGroup) *Client {
@@ -39,7 +39,7 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 		castChannel: castChannel,
 		conn:        conn,
 		log:         log,
-		Incoming:    make(chan *cast.CastMessage),
+		Incoming:    make(chan *channel.CastMessage),
 	}
 
 	if authChallenge {
@@ -75,6 +75,6 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 	return &client
 }
 
-func (client *Client) SendMessage(castMessage *cast.CastMessage) {
+func (client *Client) SendMessage(castMessage *channel.CastMessage) {
 	client.castChannel.Send(castMessage)
 }

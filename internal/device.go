@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/tristanpenman/go-cast/internal/cast"
+	"github.com/tristanpenman/go-cast/internal/channel"
 )
 
 const androidMirroringAppId = "674A0243"
@@ -37,7 +37,7 @@ type Device struct {
 	transports map[string]*Transport
 }
 
-func (device *Device) forwardCastMessage(castMessage *cast.CastMessage) {
+func (device *Device) forwardCastMessage(castMessage *channel.CastMessage) {
 	transport := device.transports[*castMessage.DestinationId]
 	if transport == nil {
 		device.log.Error("message destination does not exist", "destinationId", *castMessage.DestinationId)

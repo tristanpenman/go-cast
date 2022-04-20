@@ -4,13 +4,12 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 
-	"github.com/golang/protobuf/proto"
-
-	"github.com/tristanpenman/go-cast/internal/cast"
+	"github.com/tristanpenman/go-cast/internal/channel"
+	"google.golang.org/protobuf/proto"
 )
 
-func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cast.CastMessage, manifest map[string]string) {
-	var deviceAuthMessage cast.DeviceAuthMessage
+func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *channel.CastMessage, manifest map[string]string) {
+	var deviceAuthMessage channel.DeviceAuthMessage
 	err := proto.Unmarshal(message.PayloadBinary, &deviceAuthMessage)
 	if err != nil {
 		clientConnection.log.Error("failed to parse device auth message", "err", err)
@@ -29,11 +28,11 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cas
 	intermediateCertificate := make([][]byte, 1)
 	intermediateCertificate[0] = ica.Bytes
 
-	hashAlgorithm := cast.HashAlgorithm_SHA256
+	hashAlgorithm := channel.HashAlgorithm_SHA256
 
 	crl := make([]byte, 0)
-	deviceAuthMessage = cast.DeviceAuthMessage{
-		Response: &cast.AuthResponse{
+	deviceAuthMessage = channel.DeviceAuthMessage{
+		Response: &channel.AuthResponse{
 			Crl:                     crl,
 			Signature:               sig,
 			ClientAuthCertificate:   platform.Bytes,
@@ -52,8 +51,8 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cas
 }
 
 func (client *Client) sendDeviceAuthChallenge() bool {
-	deviceAuthMessage := &cast.DeviceAuthMessage{
-		Challenge: &cast.AuthChallenge{},
+	deviceAuthMessage := &channel.DeviceAuthMessage{
+		Challenge: &channel.AuthChallenge{},
 	}
 
 	payloadBinary, err := proto.Marshal(deviceAuthMessage)
@@ -63,11 +62,11 @@ func (client *Client) sendDeviceAuthChallenge() bool {
 	}
 
 	namespace := deviceAuthNamespace
-	payloadType := cast.CastMessage_BINARY
-	protocolVersion := cast.CastMessage_CASTV2_1_0
+	payloadType := channel.CastMessage_BINARY
+	protocolVersion := channel.CastMessage_CASTV2_1_0
 	sourceId := "sender-0"
 	destinationId := "receiver-0"
-	message := cast.CastMessage{
+	message := channel.CastMessage{
 		DestinationId:   &destinationId,
 		Namespace:       &namespace,
 		PayloadBinary:   payloadBinary,

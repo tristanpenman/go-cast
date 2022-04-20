@@ -14,18 +14,6 @@ In terms of actual code, these concepts are implemented as Go structs.
 
 ## Usage
 
-### Discovery App
-
-The `discovery` app allows you to locate Google Cast devices on your network, using mDNS.
-
-To run the discovery app in your local dev environment:
-
-    go run cmd/discovery/*.go
-
-Or to build an executable in `./bin/discovery`:
-
-    go build -o ./bin/discovery ./cmd/discovery
-
 ### Receiver App
 
 The `receiver` app will start a Google Cast receiver, which can then be cast to from compatible senders.  
@@ -50,6 +38,18 @@ Or to build an executable in `./bin/sender`:
 
     go build -o ./bin/sender ./cmd/sender
 
+### Discovery App
+
+The `discovery` app allows you to locate Google Cast devices on your network, using mDNS.
+
+To run the discovery app in your local dev environment:
+
+    go run cmd/discovery/*.go
+
+Or to build an executable in `./bin/discovery`:
+
+    go build -o ./bin/discovery ./cmd/discovery
+
 ### Cert Manifest
 
 Before running the Receiver app, you will need to create (or otherwise obtain) a valid _certificate manifest_ file. A cert manifest is a JSON document containing the certificate and private key to be used TLS connections, and additional information used for Chromecast device authentication.
@@ -60,4 +60,4 @@ An example manifest is included in [etc/cert-manifest.json](./etc/cert-manifest.
 
 The Chromecast protocol relies on message types defined in protobuf format. The cast_channel.proto file in internal/message has been borrowed from the Chromium source code. To regenerate the Go bindings, run the following command:   
 
-    protoc --go_opt=paths=source_relative --go_out=. ./internal/proto/cast_channel.proto
+    protoc --go_opt=paths=source_relative --go_out=. ./internal/channel/cast_channel.proto

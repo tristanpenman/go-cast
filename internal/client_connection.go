@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/tristanpenman/go-cast/internal/cast"
+	"github.com/tristanpenman/go-cast/internal/channel"
 )
 
 type ClientConnection struct {
@@ -21,9 +21,9 @@ type ClientConnection struct {
 }
 
 func (clientConnection *ClientConnection) sendBinary(namespace string, payloadBinary []byte, sourceId string, destinationId string) {
-	payloadType := cast.CastMessage_BINARY
-	protocolVersion := cast.CastMessage_CASTV2_1_0
-	castMessage := cast.CastMessage{
+	payloadType := channel.CastMessage_BINARY
+	protocolVersion := channel.CastMessage_CASTV2_1_0
+	castMessage := channel.CastMessage{
 		DestinationId:   &destinationId,
 		Namespace:       &namespace,
 		PayloadBinary:   payloadBinary,
@@ -46,9 +46,9 @@ func (clientConnection *ClientConnection) sendBinary(namespace string, payloadBi
 }
 
 func (clientConnection *ClientConnection) sendUtf8(namespace string, payloadUtf8 *string, sourceId string, destinationId string) {
-	payloadType := cast.CastMessage_STRING
-	protocolVersion := cast.CastMessage_CASTV2_1_0
-	castMessage := cast.CastMessage{
+	payloadType := channel.CastMessage_STRING
+	protocolVersion := channel.CastMessage_CASTV2_1_0
+	castMessage := channel.CastMessage{
 		DestinationId:   &destinationId,
 		Namespace:       &namespace,
 		PayloadUtf8:     payloadUtf8,
@@ -75,7 +75,7 @@ type connectRequest struct {
 	ConnType json.Number `json:"connType"`
 }
 
-func (clientConnection *ClientConnection) handleConnectMessage(castMessage *cast.CastMessage) {
+func (clientConnection *ClientConnection) handleConnectMessage(castMessage *channel.CastMessage) {
 	var request connectRequest
 	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &request)
 	if err != nil {
@@ -86,7 +86,7 @@ func (clientConnection *ClientConnection) handleConnectMessage(castMessage *cast
 	clientConnection.device.registerSubscription(clientConnection, *castMessage.SourceId, *castMessage.DestinationId)
 }
 
-func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.CastMessage) {
+func (clientConnection *ClientConnection) handleCastMessage(castMessage *channel.CastMessage) {
 	// CONNECT messages are special, and are essentially used to subscribe to status updates from a receiver
 	if *castMessage.Namespace == connectionNamespace {
 		clientConnection.handleConnectMessage(castMessage)
@@ -96,7 +96,7 @@ func (clientConnection *ClientConnection) handleCastMessage(castMessage *cast.Ca
 	clientConnection.device.forwardCastMessage(castMessage)
 }
 
-func (clientConnection *ClientConnection) relayCastMessage(castMessage *cast.CastMessage) {
+func (clientConnection *ClientConnection) relayCastMessage(castMessage *channel.CastMessage) {
 	clientConnection.log.Info("relay cast message")
 
 	clientConnection.relayClient.SendMessage(castMessage)
@@ -146,7 +146,7 @@ func NewClientConnection(
 				if castMessage != nil {
 					if log.IsDebug() {
 						log.Debug("received", "message", castMessage.String())
-					} else if *castMessage.PayloadType == cast.CastMessage_BINARY {
+					} else if *castMessage.PayloadType == channel.CastMessage_BINARY {
 						log.Info("received",
 							"namespace", *castMessage.Namespace,
 							"sourceId", *castMessage.SourceId,

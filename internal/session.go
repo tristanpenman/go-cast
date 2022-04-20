@@ -7,7 +7,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/tristanpenman/go-cast/internal/cast"
+	"github.com/tristanpenman/go-cast/internal/channel"
 )
 
 type Session struct {
@@ -100,8 +100,8 @@ type webrtcAnswerMessage struct {
 	Result string `json:"result"`
 }
 
-func (session *Session) handleGenericMessage(castMessage *cast.CastMessage) {
-	if *castMessage.PayloadType == cast.CastMessage_BINARY {
+func (session *Session) handleGenericMessage(castMessage *channel.CastMessage) {
+	if *castMessage.PayloadType == channel.CastMessage_BINARY {
 		session.log.Warn("ignoring message from unimplemented namespace",
 			"namespace", *castMessage.Namespace,
 			"payloadType", "STRING",
@@ -113,7 +113,7 @@ func (session *Session) handleGenericMessage(castMessage *cast.CastMessage) {
 	}
 }
 
-func (session *Session) handleWebrtcOffer(castMessage *cast.CastMessage) {
+func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 	var request webrtcOfferMessage
 	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &request)
 	if err != nil {
@@ -159,7 +159,7 @@ func (session *Session) handleWebrtcOffer(castMessage *cast.CastMessage) {
 	session.device.sendUtf8(webrtcNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
 }
 
-func (session *Session) handleWebrtcMessage(castMessage *cast.CastMessage) {
+func (session *Session) handleWebrtcMessage(castMessage *channel.CastMessage) {
 	var request WebrtcMessage
 	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &request)
 	if err != nil {
@@ -177,7 +177,7 @@ func (session *Session) handleWebrtcMessage(castMessage *cast.CastMessage) {
 	}
 }
 
-func (session *Session) HandleCastMessage(castMessage *cast.CastMessage) {
+func (session *Session) HandleCastMessage(castMessage *channel.CastMessage) {
 	switch *castMessage.Namespace {
 	case debugNamespace:
 	case mediaNamespace:
