@@ -86,9 +86,8 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	// TODO: generate this dynamically and/or allow it to be set on the command line
-	id := "a98a257b4a3dd84392a34bd0"
-	udn := uuid.New().String()
+	id := uuid.New().String()
+	udn := id
 	device := NewDevice(*deviceModel, *friendlyName, id, udn)
 
 	server := NewServer(device, manifest, clientPrefix, iface, hostname, *port, *relayHost, *relayPort, *relayAuthChallenge, &wg)

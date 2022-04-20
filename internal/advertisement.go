@@ -1,17 +1,17 @@
 package internal
 
 import (
-	"fmt"
+	"context"
 	"os"
 
+	"github.com/brutella/dnssd"
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/mdns"
 )
 
 type Advertisement struct {
-	device Device
-	log    hclog.Logger
-	server *mdns.Server
+	device    Device
+	log       hclog.Logger
+	responder dnssd.Responder
 }
 
 func NewAdvertisement(device *Device, hostname *string, port int) *Advertisement {
@@ -22,40 +22,55 @@ func NewAdvertisement(device *Device, hostname *string, port int) *Advertisement
 		*hostname, _ = os.Hostname()
 	}
 
-	info := []string{
-		"cd=",
-		"rm=",
-		"ve=2",
-		"st=0",
-		"rs=",
-		"nf=1",
-		"ic=/setup/icon.png",
-		"ca=4101",
-		fmt.Sprintf("md=%s", device.DeviceModel),
-		fmt.Sprintf("id=%s", device.Id),
-		fmt.Sprintf("fn=%s", device.FriendlyName),
+	info := map[string]string{
+		"cd": "",
+		"rm": "",
+		"ve": "02",
+		"st": "0",
+		"rs": "",
+		"nf": "1",
+		"ic": "",
+		"ca": "4101",
+		"md": device.DeviceModel,
+		"id": device.Id,
+		"fn": device.FriendlyName,
 	}
 
-	service, err := mdns.NewMDNSService(device.Id, "_googlecast._tcp", "", *hostname, port, nil, info)
+	cfg := dnssd.Config{
+		Name:   "GoCast",
+		Type:   "_googlecast._tcp",
+		Domain: "local",
+		Host:   "",
+		Port:   port,
+		Text:   info,
+	}
+
+	service, err := dnssd.NewService(cfg)
 	if err != nil {
-		log.Error("failed to create mdns service", "err", err)
+		log.Error("failed to create service", "err", err)
 		return nil
 	}
 
-	var server *mdns.Server
-	server, err = mdns.NewServer(&mdns.Config{
-		Zone: service,
-	})
-
+	responder, err := dnssd.NewResponder()
 	if err != nil {
-		log.Error("failed to create mdns server", "err", err)
+		log.Error("failed to create responder", "err", err)
 		return nil
 	}
+
+	_, err = responder.Add(service)
+	if err != nil {
+		log.Error("failed to add service to responder", "err", err)
+		return nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	responder.Respond(ctx)
 
 	log.Info("started")
 
 	return &Advertisement{
-		log:    log,
-		server: server,
+		log:       log,
+		responder: responder,
 	}
 }
