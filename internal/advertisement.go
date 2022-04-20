@@ -64,12 +64,11 @@ func NewAdvertisement(device *Device, port int) *Advertisement {
 		return nil
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	log.Info("starting")
 
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
+		defer cancel()
 		err := responder.Respond(ctx)
 		if err != nil {
 			log.Error("failed to start responder", "err", err)
