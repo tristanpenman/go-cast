@@ -5,8 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/google/uuid"
 
@@ -95,12 +98,25 @@ func main() {
 		return
 	}
 
+	var advertisement *Advertisement
 	if *enableMdns {
-		advertisement := NewAdvertisement(device, hostname, *port)
+		advertisement = NewAdvertisement(device, hostname, *port)
 		if advertisement == nil {
 			log.Error("failed to advertise receiver")
 		}
 	}
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-c
+		log.Info("interrupted")
+		if advertisement != nil {
+			advertisement.Stop()
+		}
+		server.StopListening()
+		os.Exit(0)
+	}()
 
 	wg.Wait()
 }

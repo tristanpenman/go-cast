@@ -15,6 +15,7 @@ type Server struct {
 	listener          net.Listener
 	log               hclog.Logger
 	nextClientId      int
+	open              bool
 	wg                *sync.WaitGroup
 }
 
@@ -63,6 +64,7 @@ func NewServer(
 		listener:          listener,
 		log:               log,
 		nextClientId:      0,
+		open:              true,
 		wg:                wg,
 	}
 
@@ -70,8 +72,12 @@ func NewServer(
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				log.Error("server accept failed", "err", err)
-				break
+				if server.open {
+					log.Error("server accept failed", "err", err)
+					continue
+				} else {
+					break
+				}
 			}
 
 			if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
@@ -91,10 +97,10 @@ func NewServer(
 }
 
 func (server *Server) StopListening() {
+	server.open = false
 	err := server.listener.Close()
 	if err != nil {
 		server.log.Error("failed to stop listening", "err", err)
+		server.wg.Done()
 	}
-
-	server.wg.Done()
 }

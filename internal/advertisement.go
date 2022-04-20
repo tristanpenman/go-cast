@@ -9,9 +9,15 @@ import (
 )
 
 type Advertisement struct {
+	cancel    context.CancelFunc
 	device    Device
 	log       hclog.Logger
 	responder dnssd.Responder
+}
+
+func (advertisement *Advertisement) Stop() {
+	advertisement.cancel()
+	advertisement.log.Info("stopped")
 }
 
 func NewAdvertisement(device *Device, hostname *string, port int) *Advertisement {
@@ -65,11 +71,14 @@ func NewAdvertisement(device *Device, hostname *string, port int) *Advertisement
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	responder.Respond(ctx)
+	go func() {
+		responder.Respond(ctx)
+	}()
 
 	log.Info("started")
 
 	return &Advertisement{
+		cancel:    cancel,
 		log:       log,
 		responder: responder,
 	}
