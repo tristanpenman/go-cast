@@ -4,9 +4,7 @@ This project is intended to offer a complete implementation of the [Google Cast]
 
 ## Design
 
-GoCast has been designed to be quite simple, while following many of the concepts that inherent to the Google Cast protocol. Namely, we preserve the concept of a Device that exists independently of the receiver apps that actually handle messages and display mirrored content.
-
-The following architecture diagram shows an overview of how these concepts relate to one another:
+The following architecture diagram summarises the overall design of GoCast, and how it accommodates the requirements of the Google Cast protocol:
 
 ![Architecture Diagram](./doc/architecture.drawio.png)
 
