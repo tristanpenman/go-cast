@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-hclog"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/tristanpenman/go-cast/internal/channel"
 )
@@ -16,6 +17,34 @@ type Client struct {
 	conn        net.Conn
 	log         hclog.Logger
 	Incoming    chan *channel.CastMessage
+}
+
+func (client *Client) sendDeviceAuthChallenge() bool {
+	deviceAuthMessage := &channel.DeviceAuthMessage{
+		Challenge: &channel.AuthChallenge{},
+	}
+
+	payloadBinary, err := proto.Marshal(deviceAuthMessage)
+	if err != nil {
+		client.log.Error("failed to encode device auth challenge", "err", err)
+		return false
+	}
+
+	namespace := deviceAuthNamespace
+	payloadType := channel.CastMessage_BINARY
+	protocolVersion := channel.CastMessage_CASTV2_1_0
+	sourceId := "sender-0"
+	destinationId := "receiver-0"
+	message := channel.CastMessage{
+		DestinationId:   &destinationId,
+		Namespace:       &namespace,
+		PayloadBinary:   payloadBinary,
+		PayloadType:     &payloadType,
+		ProtocolVersion: &protocolVersion,
+		SourceId:        &sourceId,
+	}
+
+	return client.castChannel.Send(&message)
 }
 
 func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGroup) *Client {

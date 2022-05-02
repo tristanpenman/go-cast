@@ -1,11 +1,14 @@
 package internal
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"net"
 
 	"github.com/hashicorp/go-hclog"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/tristanpenman/go-cast/internal/channel"
 )
@@ -94,6 +97,48 @@ func (clientConnection *ClientConnection) handleCastMessage(castMessage *channel
 	}
 
 	clientConnection.device.forwardCastMessage(castMessage)
+}
+
+func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *channel.CastMessage, manifest map[string]string) {
+	var deviceAuthMessage channel.DeviceAuthMessage
+	err := proto.Unmarshal(message.PayloadBinary, &deviceAuthMessage)
+	if err != nil {
+		clientConnection.log.Error("failed to parse device auth message", "err", err)
+		return
+	}
+
+	// intermediate and platform certs are in PEM format
+	// TODO: check that we don't have any remaining data in `rest`
+	ica, _ := pem.Decode([]byte(manifest["ica"]))
+	platform, _ := pem.Decode([]byte(manifest["cpu"]))
+
+	// Signature is just base64
+	sig, _ := base64.StdEncoding.DecodeString(manifest["sig"])
+
+	// TODO: is there a tidier way to do this?
+	intermediateCertificate := make([][]byte, 1)
+	intermediateCertificate[0] = ica.Bytes
+
+	hashAlgorithm := channel.HashAlgorithm_SHA256
+
+	crl := make([]byte, 0)
+	deviceAuthMessage = channel.DeviceAuthMessage{
+		Response: &channel.AuthResponse{
+			Crl:                     crl,
+			Signature:               sig,
+			ClientAuthCertificate:   platform.Bytes,
+			IntermediateCertificate: intermediateCertificate,
+			HashAlgorithm:           &hashAlgorithm,
+		},
+	}
+
+	payloadBinary, err := proto.Marshal(&deviceAuthMessage)
+	if err != nil {
+		clientConnection.log.Error("failed to encode device auth response", "err", err)
+		return
+	}
+
+	clientConnection.sendBinary(deviceAuthNamespace, payloadBinary, *message.DestinationId, *message.SourceId)
 }
 
 func (clientConnection *ClientConnection) relayCastMessage(castMessage *channel.CastMessage) {
