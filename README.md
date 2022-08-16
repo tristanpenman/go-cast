@@ -50,9 +50,25 @@ Or to build an executable in `./bin/discovery`:
 
 ### Cert Manifest
 
-Before running the Receiver app, you will need to create (or otherwise obtain) a valid _certificate manifest_ file. A cert manifest is a JSON document containing the certificate and private key to be used TLS connections, and additional information used for Chromecast device authentication.
+Before running the Receiver app, you will need to create or obtain a valid _certificate manifest_ file. A cert manifest is a JSON document containing the certificate and private key to be used TLS connections, and additional information used for Chromecast device authentication.
 
-An example manifest is included in [etc/cert-manifest.json](./etc/cert-manifest.json). Note: This file does not include the fields required for device authentication.
+An example manifest file is included in [etc/cert-manifest.json](./etc/cert-manifest.json).
+
+If you choose to provide your own manifest (e.g. using a rooted Chromecast), then the appropriately formatted file can be provided using the `--cert-manifest <file>` command line argument.
+
+Alternatively, you can use a certificate service for this. A conforming certificate service endpoint takes three query parameters:
+
+* `a=<md5(id)>`
+* `b=<unix-timestamp>`
+* `c=<md5(a + b + salt)>`
+
+The base URL is set using `--cert-service=<url>` and the salt is set using `--cert-service-salt=<salt>`. For example:
+
+    ./bin/receiver/*.go \
+      --cert-service=http://my-cert-service/ \
+      --cert-service-salt=48e68aacc3553f2acf234c6ae957b053 ...
+
+The service is expected to return a cert manifest that is valid for the given timestamp.
 
 ## Protobuf
 
