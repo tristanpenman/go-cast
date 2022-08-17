@@ -107,28 +107,33 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cha
 		return
 	}
 
-	// intermediate and platform certs are in PEM format
-	// TODO: check that we don't have any remaining data in `rest`
+	// certificates are in PEM format
+	pu, _ := pem.Decode([]byte(manifest["pu"]))
 	ica, _ := pem.Decode([]byte(manifest["ica"]))
-	platform, _ := pem.Decode([]byte(manifest["cpu"]))
+	cpu, _ := pem.Decode([]byte(manifest["cpu"]))
+
+	// TODO: check that we don't have any remaining data in `rest`
 
 	// Signature is just base64
 	sig, _ := base64.StdEncoding.DecodeString(manifest["sig"])
 
-	// TODO: is there a tidier way to do this?
-	intermediateCertificate := make([][]byte, 1)
-	intermediateCertificate[0] = ica.Bytes
+	hashAlgorithm := DetectAlgorithm(cpu, pu, sig)
+	if hashAlgorithm == nil {
+		clientConnection.log.Warn("failed to identify hashing algorithm")
+	} else if *hashAlgorithm == channel.HashAlgorithm_SHA1 {
+		clientConnection.log.Info("detected SHA1 as hashing algorithm")
+	} else {
+		clientConnection.log.Info("detected SHA256 as hashing algorithm")
+	}
 
-	hashAlgorithm := channel.HashAlgorithm_SHA256
+	intermediateCertificate := [][]byte{ica.Bytes}
 
-	crl := make([]byte, 0)
 	deviceAuthMessage = channel.DeviceAuthMessage{
 		Response: &channel.AuthResponse{
-			Crl:                     crl,
 			Signature:               sig,
-			ClientAuthCertificate:   platform.Bytes,
+			ClientAuthCertificate:   cpu.Bytes,
 			IntermediateCertificate: intermediateCertificate,
-			HashAlgorithm:           &hashAlgorithm,
+			HashAlgorithm:           hashAlgorithm,
 		},
 	}
 

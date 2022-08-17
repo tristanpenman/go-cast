@@ -98,6 +98,10 @@ Here the `--print-manifest` argument tells `manifest-tool` to print out a OpenSS
     Serial Number: 139298...
     ...
 
+This can also be used for signature verification. SHA-1 signatures can be verified using `--verify-signature`. SHA-256 signatures can be verified by adding the `--use-sha-256` option. e.g:
+
+    go run cmd/manifest-tool/*.go --cert-manifest=<path> --verify-signature --use-sha-256
+
 ## Development
 
 ### Protobuf

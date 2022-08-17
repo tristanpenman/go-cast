@@ -86,7 +86,7 @@ func NewServer(
 				server.nextClientId++
 				server.clientConnections = append(server.clientConnections, clientConnection)
 			} else {
-				log.Info("ignored connection", "remote addr", conn.RemoteAddr())
+				log.Debug("ignored connection", "remote addr", conn.RemoteAddr())
 				_ = conn.Close()
 			}
 		}

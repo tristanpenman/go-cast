@@ -3,15 +3,21 @@ package internal
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto"
 	"crypto/md5"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"github.com/grantae/certinfo"
 	"github.com/hashicorp/go-hclog"
+	"github.com/tristanpenman/go-cast/internal/channel"
 	"io"
 	"io/ioutil"
 	"math"
@@ -166,4 +172,75 @@ func ReadManifest(log hclog.Logger, certManifest string, fixNewlines bool) map[s
 	}
 
 	return manifest
+}
+
+func DetectAlgorithm(cpu *pem.Block, pu *pem.Block, sig []byte) *channel.HashAlgorithm {
+	cpuCert, err := x509.ParseCertificate(cpu.Bytes)
+	if err != nil {
+		fmt.Printf("Error: failed to parse certificate (%s)", err)
+		return nil
+	}
+
+	rsaPublicKey := cpuCert.PublicKey.(*rsa.PublicKey)
+
+	// try SHA256
+	{
+		hash := sha256.Sum256(pu.Bytes)
+		err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, hash[:], sig)
+		if err == nil {
+			result := channel.HashAlgorithm_SHA256
+			return &result
+		}
+	}
+
+	// try SHA1
+	{
+		hash := sha1.Sum(pu.Bytes)
+		err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA1, hash[:], sig)
+		if err == nil {
+			result := channel.HashAlgorithm_SHA1
+			return &result
+		}
+	}
+
+	return nil
+}
+
+func VerifySignature(manifest map[string]string, useSha256 bool) {
+	cpu, rest := pem.Decode([]byte(manifest["cpu"]))
+	if cpu == nil || len(rest) > 0 {
+		fmt.Println("Error: failed to decode pem data")
+		return
+	}
+
+	cpuCert, err := x509.ParseCertificate(cpu.Bytes)
+	if err != nil {
+		fmt.Printf("Error: failed to parse certificate (%s)", err)
+		return
+	}
+
+	pu, _ := pem.Decode([]byte(manifest["pu"]))
+	if pu == nil || len(rest) > 0 {
+		fmt.Println("Error: failed to decode pem data")
+		return
+	}
+
+	sig, _ := base64.StdEncoding.DecodeString(manifest["sig"])
+
+	rsaPublicKey := cpuCert.PublicKey.(*rsa.PublicKey)
+
+	if useSha256 {
+		hash := sha256.Sum256(pu.Bytes)
+		err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA256, hash[:], sig)
+	} else {
+		hash := sha1.Sum(pu.Bytes)
+		err = rsa.VerifyPKCS1v15(rsaPublicKey, crypto.SHA1, hash[:], sig)
+	}
+
+	if err != nil {
+		fmt.Println("Not valid")
+		return
+	}
+
+	fmt.Println("Valid")
 }

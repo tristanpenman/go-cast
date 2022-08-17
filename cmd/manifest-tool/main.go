@@ -12,6 +12,8 @@ func main() {
 	var certServiceSalt = flag.String("cert-service-salt", "", "salt for generating cert service hash")
 	var fixNewlines = flag.Bool("fix-newlines", false, "fix newline characters in manifest file")
 	var printManifest = flag.Bool("print-manifest", false, "print manifest details to terminal")
+	var useSha256 = flag.Bool("use-sha-256", false, "use SHA256 for signature verification")
+	var verifySignature = flag.Bool("verify-signature", false, "verify signature")
 
 	flag.Parse()
 
@@ -32,7 +34,10 @@ func main() {
 	}
 
 	if *printManifest {
-		log.Info("print manifest")
 		PrintManifest(manifest)
+	}
+
+	if *verifySignature {
+		VerifySignature(manifest, *useSha256)
 	}
 }
