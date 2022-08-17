@@ -70,7 +70,7 @@ func DownloadManifest(log hclog.Logger, certService string, certServiceSalt stri
 
 	var url = certService + "?a=" + aStr + "&b=" + bStr + "&c=" + cStr
 
-	log.Error(url)
+	log.Info(fmt.Sprintf("Downloading from: %s", url))
 
 	resp, err := http.Get(url)
 	if err != nil {
