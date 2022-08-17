@@ -48,7 +48,7 @@ Or to build an executable in `./bin/discovery`:
 
     go build -o ./bin/discovery ./cmd/discovery
 
-### Cert Manifest
+## Cert Manifests
 
 Before running the Receiver app, you will need to create or obtain a valid _certificate manifest_ file. A cert manifest is a JSON document containing the certificate and private key to be used TLS connections, and additional information used for Chromecast device authentication.
 
@@ -56,7 +56,7 @@ An example manifest file is included in [etc/cert-manifest.json](./etc/cert-mani
 
 If you choose to provide your own manifest (e.g. using a rooted Chromecast), then the appropriately formatted file can be provided using the `--cert-manifest <file>` command line argument.
 
-Alternatively, you can use a certificate service for this. A conforming certificate service endpoint takes three query parameters:
+Alternatively, you can use a key service for this. A conforming key service endpoint takes three query parameters:
 
 * `a=<md5(id)>`
 * `b=<unix-timestamp>`
@@ -70,7 +70,37 @@ The base URL is set using `--cert-service=<url>` and the salt is set using `--ce
 
 The service is expected to return a cert manifest that is valid for the given timestamp.
 
-## Protobuf
+The service is expected to use the timestamp to retrieve a certificate manifest that contains a signature for a valid peer key.
+
+### Manifest Tool
+
+To test or inspect an existing manifest file, you can use the `manifest-tool` app. It takes similar arguments to the `receiver` app, for specifying how to read/download a manifest.
+
+    go run cmd/manifest-tool/*.go --cert-manifest=<path> --print-manifest
+
+Here the `--print-manifest` argument tells `manifest-tool` to print out a OpenSSL-style dump of the certificates contained in the manifest:
+
+    --------------------------------------------------------------------------------
+    Peer Certificate (pu)
+    --------------------------------------------------------------------------------
+    Certificate:
+    Data:
+    Version: 1 (0x0)
+    Serial Number: 1422945709790358148560...
+    ...
+
+    --------------------------------------------------------------------------------
+    Device Certificate (cpu)
+    --------------------------------------------------------------------------------
+    Certificate:
+    Data:
+    Version: 3 (0x2)
+    Serial Number: 139298...
+    ...
+
+## Development
+
+### Protobuf
 
 The Chromecast protocol relies on message types defined in protobuf format. The cast_channel.proto file in internal/message has been borrowed from the Chromium source code. To regenerate the Go bindings, run the following command:   
 
