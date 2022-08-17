@@ -25,14 +25,11 @@ func NewAdvertisement(device *Device, port int) *Advertisement {
 	log.Info("starting mdns...")
 
 	info := map[string]string{
-		"cd": "",
-		"rm": "",
 		"ve": "02",
 		"st": "0",
-		"rs": "",
 		"nf": "1",
-		"ic": "",
 		"ca": "4101",
+		"ic": "/setup/icon.png",
 		"md": device.DeviceModel,
 		"id": device.Id,
 		"fn": device.FriendlyName,
