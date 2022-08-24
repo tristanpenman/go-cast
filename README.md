@@ -56,7 +56,7 @@ An example manifest file is included in [etc/cert-manifest.json](./etc/cert-mani
 
 If you choose to provide your own manifest (e.g. using a rooted Chromecast), then the appropriately formatted file can be provided using the `--cert-manifest <file>` command line argument.
 
-Alternatively, you can use a key service for this. A conforming key service endpoint takes three query parameters:
+Alternatively, you can use a certificate service for this. A conforming certificate service endpoint takes three query parameters:
 
 * `a=<md5(id)>`
 * `b=<unix-timestamp>`
@@ -101,6 +101,12 @@ Here the `--print-manifest` argument tells `manifest-tool` to print out a OpenSS
 This can also be used for signature verification. SHA-1 signatures can be verified using `--verify-signature`. SHA-256 signatures can be verified by adding the `--use-sha-256` option. e.g:
 
     go run cmd/manifest-tool/*.go --cert-manifest=<path> --verify-signature --use-sha-256
+
+### Certificate Service
+
+If you have the means to generate your own manifest files (i.e. via a rooted Chromecast) then you can run your own certificate service using the `cert-service` app:
+
+    go run cmd/cert-service/*.go --cert-manifest-dir=<path> --cert-service-salt=<salt>
 
 ## Development
 

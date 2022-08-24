@@ -70,23 +70,28 @@ func DownloadManifest(log hclog.Logger, certService string, certServiceSalt stri
 
 	var url = certService + "?a=" + aStr + "&b=" + bStr + "&c=" + cStr
 
-	log.Info(fmt.Sprintf("Downloading from: %s", url))
+	log.Info(fmt.Sprintf("downloading from: %s", url))
 
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to download %s: %d", url, err))
+		log.Error(fmt.Sprintf("failed to download %s: %d", url, err))
+		return nil
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		log.Error(fmt.Sprintf("bad server response: %s", resp.Status))
 		return nil
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to read response body: %d", err))
+		log.Error(fmt.Sprintf("failed to read response body: %d", err))
 		return nil
 	}
 
 	data, err := gUnzipData(body)
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to unzip: %d", err))
+		log.Error(fmt.Sprintf("failed to unzip: %s", err))
 		return nil
 	}
 
