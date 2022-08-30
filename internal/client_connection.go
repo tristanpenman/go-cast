@@ -19,7 +19,6 @@ type ClientConnection struct {
 	device      *Device
 	id          int
 	log         hclog.Logger
-	relayClient *Client
 	sessions    map[string]*Session
 }
 
@@ -146,18 +145,11 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cha
 	clientConnection.sendBinary(deviceAuthNamespace, payloadBinary, *message.DestinationId, *message.SourceId)
 }
 
-func (clientConnection *ClientConnection) relayCastMessage(castMessage *channel.CastMessage) {
-	clientConnection.log.Info("relay cast message")
-
-	clientConnection.relayClient.SendMessage(castMessage)
-}
-
 func NewClientConnection(
 	device *Device,
 	conn net.Conn,
 	id int,
 	manifest map[string]string,
-	relayClient *Client,
 ) *ClientConnection {
 	log := NewLogger(fmt.Sprintf("client-connection (%d)", id))
 
@@ -170,14 +162,11 @@ func NewClientConnection(
 		id:          id,
 		sessions:    make(map[string]*Session),
 		log:         log,
-		relayClient: relayClient,
 	}
 
-	if relayClient == nil {
-		receiver := NewReceiver(device, "receiver-0", clientConnection.id)
-		device.registerTransport(receiver)
-		device.registerSubscription(&clientConnection, "sender-0", "receiver-0")
-	}
+	receiver := NewReceiver(device, "receiver-0", clientConnection.id)
+	device.registerTransport(receiver)
+	device.registerSubscription(&clientConnection, "sender-0", "receiver-0")
 
 	go func() {
 		defer func() {
@@ -214,25 +203,13 @@ func NewClientConnection(
 					if *castMessage.Namespace == deviceAuthNamespace {
 						// device authentication is always handled locally
 						clientConnection.handleDeviceAuthChallenge(castMessage, manifest)
-					} else if relayClient == nil {
-						clientConnection.handleCastMessage(castMessage)
 					} else {
-						// all other messages are relayed when in relay mode
-						clientConnection.relayCastMessage(castMessage)
+						clientConnection.handleCastMessage(castMessage)
 					}
 				}
 			}
 		}
 	}()
-
-	if relayClient != nil {
-		go func() {
-			select {
-			case castMessage := <-relayClient.Incoming:
-				clientConnection.castChannel.Send(castMessage)
-			}
-		}()
-	}
 
 	return &clientConnection
 }

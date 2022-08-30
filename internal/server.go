@@ -25,9 +25,6 @@ func NewServer(
 	clientPrefix *string,
 	iface *string,
 	port int,
-	relayHost string,
-	relayPort uint,
-	relayAuthChallenge bool,
 	wg *sync.WaitGroup,
 ) *Server {
 	var log = NewLogger("server")
@@ -47,16 +44,6 @@ func NewServer(
 	}
 
 	log.Info("listening")
-
-	// if relaying, attempt to connect to target
-	var relayClient *Client
-	if relayHost != "" {
-		relayClient = NewClient(relayHost, relayPort, relayAuthChallenge, nil)
-		if relayClient == nil {
-			log.Error("failed to connect to target")
-			return nil
-		}
-	}
 
 	server := Server{
 		clientConnections: make([]*ClientConnection, 0),
@@ -82,7 +69,7 @@ func NewServer(
 			if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
 				log.Info("accepted connection", "remote addr", conn.RemoteAddr())
 				id := server.nextClientId
-				clientConnection := NewClientConnection(device, conn, id, manifest, relayClient)
+				clientConnection := NewClientConnection(device, conn, id, manifest)
 				server.nextClientId++
 				server.clientConnections = append(server.clientConnections, clientConnection)
 			} else {

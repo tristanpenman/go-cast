@@ -24,8 +24,6 @@ Or to build an executable in `./bin/receiver`:
 
     go build -o ./bin/receiver ./cmd/receiver
 
-The `receiver` app can also be run in relay mode, where it will handle device authentication, but otherwise forward all messages and data to another host.
-
 ### Sender App
 
 To run the sender in your local dev environment:

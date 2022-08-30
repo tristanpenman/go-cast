@@ -24,9 +24,6 @@ func main() {
 	var friendlyName = flag.String("friendly-name", "GoCast Receiver", "friendly name")
 	var iface = flag.String("iface", "", "interface to listen on (optional)")
 	var port = flag.Int("port", 8009, "port to listen on")
-	var relayAuthChallenge = flag.Bool("relay-auth-challenge", false, "send auth challenge when relaying")
-	var relayHost = flag.String("relay-host", "", "relay to another Chromecast receiver (optional)")
-	var relayPort = flag.Uint("relay-port", 8009, "port to relay to (optional)")
 
 	flag.Parse()
 
@@ -46,9 +43,6 @@ func main() {
 		"friendly-name", *friendlyName,
 		"iface", *iface,
 		"port", *port,
-		"relay-auth-challenge", *relayAuthChallenge,
-		"relay-host", *relayHost,
-		"relay-port", *relayPort,
 	)
 
 	var manifest map[string]string
@@ -74,7 +68,7 @@ func main() {
 	udn := id
 	device := NewDevice(*deviceModel, *friendlyName, id, udn)
 
-	server := NewServer(device, manifest, clientPrefix, iface, *port, *relayHost, *relayPort, *relayAuthChallenge, &wg)
+	server := NewServer(device, manifest, clientPrefix, iface, *port, &wg)
 	if server == nil {
 		return
 	}
