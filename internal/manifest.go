@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"github.com/grantae/certinfo"
 	"github.com/hashicorp/go-hclog"
@@ -23,10 +24,16 @@ import (
 	"math"
 	"math/big"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 )
+
+func beginningOfDay(t time.Time) time.Time {
+	year, month, day := t.Date()
+	return time.Date(year, month, day, 0, 0, 0, 0, t.Location())
+}
 
 func randomId() (int64, error) {
 	val, err := rand.Int(rand.Reader, big.NewInt(int64(math.MaxInt64)))
@@ -56,7 +63,7 @@ func gUnzipData(data []byte) (resData []byte, err error) {
 	return
 }
 
-func DownloadManifest(log hclog.Logger, certService string, certServiceSalt string) map[string]string {
+func DownloadManifest(log hclog.Logger, certService string, certServiceSalt string) (map[string]string, error) {
 	var id, _ = randomId()
 
 	var a = md5.Sum([]byte(strconv.FormatInt(id, 10)))
@@ -74,25 +81,21 @@ func DownloadManifest(log hclog.Logger, certService string, certServiceSalt stri
 
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to download %s: %d", url, err))
-		return nil
+		return nil, errors.New(fmt.Sprintf("failed to download %s: %d", url, err))
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
-		log.Error(fmt.Sprintf("bad server response: %s", resp.Status))
-		return nil
+		return nil, errors.New(fmt.Sprintf("bad server response: %s", resp.Status))
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to read response body: %d", err))
-		return nil
+		return nil, errors.New(fmt.Sprintf("failed to read response body: %d", err))
 	}
 
 	data, err := gUnzipData(body)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to unzip: %s", err))
-		return nil
+		return nil, errors.New(fmt.Sprintf("failed to unzip: %s", err))
 	}
 
 	var s = string(data)
@@ -102,11 +105,10 @@ func DownloadManifest(log hclog.Logger, certService string, certServiceSalt stri
 	var manifest map[string]string
 	err = json.Unmarshal([]byte(s), &manifest)
 	if err != nil {
-		log.Error("failed to parse certificate manifest file", "err", err)
-		return nil
+		return nil, errors.New("failed to parse certificate manifest file " + err.Error())
 	}
 
-	return manifest
+	return manifest, nil
 }
 
 func PrintCertificate(bytes []byte) {
@@ -148,11 +150,10 @@ func PrintManifest(manifest map[string]string) {
 	PrintCertificate([]byte(manifest["ica"]))
 }
 
-func ReadManifest(log hclog.Logger, certManifest string, fixNewlines bool) map[string]string {
+func ReadManifest(log hclog.Logger, certManifest string, fixNewlines bool) (map[string]string, error) {
 	data, err := ioutil.ReadFile(certManifest)
 	if err != nil {
-		log.Error("failed to read certificate manifest file from disk", "err", err)
-		return nil
+		return nil, err
 	}
 
 	// convert new-line characters so that JSON parses correctly
@@ -165,8 +166,7 @@ func ReadManifest(log hclog.Logger, certManifest string, fixNewlines bool) map[s
 	var manifest map[string]string
 	err = json.Unmarshal([]byte(s), &manifest)
 	if err != nil {
-		log.Error("failed to parse certificate manifest file", "err", err)
-		return nil
+		return nil, err
 	}
 
 	if log.IsDebug() {
@@ -176,7 +176,21 @@ func ReadManifest(log hclog.Logger, certManifest string, fixNewlines bool) map[s
 		}
 	}
 
-	return manifest
+	return manifest, nil
+}
+
+func MakeCertManifestPath(certManifestDir string, timestamp string) (*string, error) {
+	i, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	unixTime := time.Unix(i, 0).UTC()
+	bod := beginningOfDay(unixTime)
+
+	filename := fmt.Sprintf("certs-%04d%02d%02d.json", bod.Year(), bod.Month(), bod.Day())
+	result := path.Join(certManifestDir, filename)
+	return &result, nil
 }
 
 func DetectAlgorithm(cpu *pem.Block, pu *pem.Block, sig []byte) *channel.HashAlgorithm {

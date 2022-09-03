@@ -5,13 +5,9 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path"
-	"strconv"
-	"time"
 
 	. "github.com/tristanpenman/go-cast/internal"
 )
@@ -26,29 +22,6 @@ func validateChecksum(id string, timestamp string, checksum string) bool {
 	md5Sum := md5.Sum(key)
 	md5SumStr := hex.EncodeToString(md5Sum[:])
 	return md5SumStr == checksum
-}
-
-func beginningOfDay(t time.Time) time.Time {
-	year, month, day := t.Date()
-	return time.Date(year, month, day, 0, 0, 0, 0, t.Location())
-}
-
-func findCertManifest(timestamp string) *string {
-	i, err := strconv.ParseInt(timestamp, 10, 64)
-	if err != nil {
-		log.Error("failed to parse timestamp", err)
-		return nil
-	}
-
-	unixTime := time.Unix(i, 0).UTC()
-	log.Info("original time: " + unixTime.String())
-
-	bod := beginningOfDay(unixTime)
-	log.Info("beginning of day: " + bod.String())
-
-	filename := fmt.Sprintf("certs-%04d%02d%02d.json", bod.Year(), bod.Month(), bod.Day())
-	result := path.Join(*certManifestDir, filename)
-	return &result
 }
 
 func writeCompressed(writer http.ResponseWriter, fileBytes []byte) {
@@ -86,15 +59,16 @@ func getRoot(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	certManifestPath := findCertManifest(timestamp)
-	if certManifestPath == nil {
+	certManifestPath, err := MakeCertManifestPath(*certManifestDir, timestamp)
+	if err != nil {
+		log.Error("failed to make cert manifest path: " + err.Error())
 		writer.WriteHeader(http.StatusNotFound)
 		return
 	}
 
 	fileBytes, err := ioutil.ReadFile(*certManifestPath)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("failed to read cert manifest: " + err.Error())
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
