@@ -24,13 +24,13 @@ func main() {
 
 	var manifest map[string]string
 	if *certManifest != "" {
-		manifest = ReadManifest(log, *certManifest, *fixNewlines)
+		manifest, _ = ReadManifest(log, *certManifest, *fixNewlines)
 	} else if *certService != "" {
 		if *certServiceSalt == "" {
 			log.Error("missing cert service salt")
 			return
 		}
-		manifest = DownloadManifest(log, *certService, *certServiceSalt)
+		manifest, _ = DownloadManifest(log, *certService, *certServiceSalt)
 	}
 
 	if *printManifest {
