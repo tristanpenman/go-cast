@@ -23,14 +23,23 @@ func main() {
 	}
 
 	var manifest map[string]string
+	var err error
+
 	if *certManifest != "" {
-		manifest = ReadManifest(log, *certManifest, *fixNewlines)
+		manifest, err = ReadManifest(log, *certManifest, *fixNewlines)
+		if err != nil {
+			log.Error("failed to read manifest: " + err.Error())
+			return
+		}
 	} else if *certService != "" {
 		if *certServiceSalt == "" {
 			log.Error("missing cert service salt")
 			return
 		}
-		manifest = DownloadManifest(log, *certService, *certServiceSalt)
+		manifest, err = DownloadManifest(log, *certService, *certServiceSalt)
+		if err != nil {
+			log.Error("failed to download manifest: " + err.Error())
+		}
 	}
 
 	if *printManifest {
