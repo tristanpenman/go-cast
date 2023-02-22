@@ -89,13 +89,14 @@ func (clientConnection *ClientConnection) handleConnectMessage(castMessage *chan
 }
 
 func (clientConnection *ClientConnection) handleCastMessage(castMessage *channel.CastMessage) {
-	// CONNECT messages are special, and are essentially used to subscribe to status updates from a receiver
 	if *castMessage.Namespace == connectionNamespace {
+		// CONNECT messages are special, and are essentially used to
+		// subscribe to status updates from a receiver
 		clientConnection.handleConnectMessage(castMessage)
-		return
+	} else {
+		// All other messages can be forwarded via the device hub
+		clientConnection.device.forwardCastMessage(castMessage)
 	}
-
-	clientConnection.device.forwardCastMessage(castMessage)
 }
 
 func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *channel.CastMessage, manifest map[string]string) {

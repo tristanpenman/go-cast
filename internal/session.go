@@ -1,12 +1,21 @@
 package internal
 
 import (
+	"bytes"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image/jpeg"
 	"net"
+	"os"
 
+	// third-party
 	"github.com/hashicorp/go-hclog"
+	"github.com/pion/rtp"
+	"github.com/xlab/libvpx-go/vpx"
 
+	// internal
 	"github.com/tristanpenman/go-cast/internal/channel"
 )
 
@@ -17,7 +26,9 @@ type Session struct {
 	StatusText  string
 
 	// implementation
+	decrypters  map[uint32]*Decrypter
 	device      *Device
+	frameCount  int
 	log         hclog.Logger
 	packetConn  net.PacketConn
 	stop        chan struct{}
@@ -130,6 +141,16 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 			receiverRtcpEventLog = append(receiverRtcpEventLog, supportedStream.Index)
 			sendIndexes = append(sendIndexes, supportedStream.Index)
 			ssrcs = append(ssrcs, supportedStream.Ssrc)
+
+			key, _ := hex.DecodeString(supportedStream.AesKey)
+			iv, _ := hex.DecodeString(supportedStream.AesIvMask)
+
+			decrypter := NewDecrypter(key, iv)
+
+			session.log.Info("registering decrypter", "ssrc", supportedStream.Ssrc)
+
+			ssrc := uint32(supportedStream.Ssrc)
+			session.decrypters[ssrc] = decrypter
 		}
 	}
 
@@ -211,6 +232,46 @@ func (session *Session) TransportId() string {
 	return session.transportId
 }
 
+func (session *Session) decodeBuffer(ctx *vpx.CodecCtx, payload []byte, log hclog.Logger) {
+	err := vpx.Error(vpx.CodecDecode(ctx, string(payload), uint32(len(payload)), nil, 0))
+	if err != nil {
+		log.Error("failed to decode buffer: " + err.Error())
+		return
+	}
+
+	var iter vpx.CodecIter
+	image := vpx.CodecGetFrame(ctx, &iter)
+	if image != nil {
+		image.Deref()
+		session.frameCount++
+
+		log.Info("image", "format", image.Fmt)
+
+		jpegBuffer := new(bytes.Buffer)
+		if err = jpeg.Encode(jpegBuffer, image.ImageYCbCr(), nil); err != nil {
+			log.Error("failed to encode jpeg: " + err.Error())
+			return
+		}
+
+		fo, err := os.Create(fmt.Sprintf("%d%s", session.frameCount, ".jpg"))
+		if err != nil {
+			log.Error("failed to create image: " + err.Error())
+			return
+		}
+
+		if _, err := fo.Write(jpegBuffer.Bytes()); err != nil {
+			log.Error("failed to write jpeg: " + err.Error())
+			return
+		}
+
+		err = fo.Close()
+		if err != nil {
+			log.Warn("failed to close file: " + err.Error())
+			return
+		}
+	}
+}
+
 func NewSession(appId string, clientId int, device *Device, displayName string, sessionId string, transportId string) *Session {
 	log := NewLogger(fmt.Sprintf("session (%d) [%s]", clientId, sessionId))
 
@@ -234,6 +295,7 @@ func NewSession(appId string, clientId int, device *Device, displayName string, 
 		StatusText:  "",
 
 		// implementation
+		decrypters:  make(map[uint32]*Decrypter),
 		device:      device,
 		log:         log,
 		packetConn:  packetConn,
@@ -244,10 +306,28 @@ func NewSession(appId string, clientId int, device *Device, displayName string, 
 
 	log.Info("listening on port", "port", GetPort(packetConn.LocalAddr()))
 
+	ctx := vpx.NewCodecCtx()
+	iface := vpx.DecoderIfaceVP8()
+
+	err = vpx.Error(vpx.CodecDecInitVer(ctx, iface, nil, 0, vpx.DecoderABIVersion))
+	if err != nil {
+		log.Error(err.Error())
+	}
+
 	go func() {
-		bytes := make([]byte, 1500)
+		file, err := os.Create("test.vp8")
+		defer file.Close()
+		if err != nil {
+			log.Error(err.Error())
+		}
+
+		data := make([]byte, 20000)
+		prevFrameId := 0
+
+		buffer := make([]byte, 0)
+
 		for {
-			count, peer, err := packetConn.ReadFrom(bytes)
+			count, _, err := packetConn.ReadFrom(data)
 			if session.stopping {
 				log.Info("stopping udp listener")
 				break
@@ -256,7 +336,58 @@ func NewSession(appId string, clientId int, device *Device, displayName string, 
 				break
 			}
 
-			log.Info("read %d from %s", count, peer.Network())
+			log.Info(fmt.Sprintf("read %d bytes", count))
+
+			packet := &rtp.Packet{}
+			packet.Unmarshal(data)
+			log.Info("payload", "payloadType", packet.PayloadType)
+
+			if packet.PayloadType == 72 {
+				// rtcp: ignore for now
+				continue
+			}
+
+			if packet.PayloadType != 96 {
+				// ignore audio packets
+				continue
+			}
+
+			decrypter := session.decrypters[packet.SSRC]
+
+			// bit flags
+			bits := int(data[12])
+			keyframe := (bits & 0x80) != 0
+			ref := (bits & 0x40) != 0
+			numExt := bits & 0x3f
+
+			// frmae id
+			frameId := int(data[13])
+
+			// packet id
+			packetId := make([]byte, 2)
+			r2 := bytes.NewReader(data[14:])
+			_ = binary.Read(r2, binary.BigEndian, packetId)
+
+			log.Info("frame",
+				"keyframe", keyframe,
+				"ref", ref,
+				"numExt", numExt,
+				"frameId", frameId,
+				"prevFrameId", prevFrameId,
+				"packetId", binary.BigEndian.Uint16(packetId))
+
+			if frameId != prevFrameId {
+				session.decodeBuffer(ctx, buffer, log)
+				decrypter.Reset(frameId)
+				buffer = make([]byte, 0)
+				prevFrameId = frameId
+			}
+
+			// TODO: offset has been fudged here
+			ciphertext := data[23:]
+			plaintext := make([]byte, len(ciphertext))
+			decrypter.Decrypt(ciphertext, plaintext)
+			buffer = append(buffer, plaintext...)
 		}
 
 		packetConn.Close()

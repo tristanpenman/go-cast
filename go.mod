@@ -8,6 +8,8 @@ require (
 	github.com/grantae/certinfo v0.0.0-20170412194111-59d56a35515b
 	github.com/hashicorp/go-hclog v1.4.0
 	github.com/hashicorp/mdns v1.0.5
+	github.com/pion/rtp v1.7.13
+	github.com/xlab/libvpx-go v0.0.0-20220203233824-652b2616315c
 	google.golang.org/protobuf v1.28.1
 )
 
@@ -16,6 +18,7 @@ require (
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/miekg/dns v1.1.50 // indirect
+	github.com/pion/randutil v0.1.0 // indirect
 	golang.org/x/mod v0.4.2 // indirect
 	golang.org/x/net v0.0.0-20210726213435-c6fcb2dbf985 // indirect
 	golang.org/x/sys v0.0.0-20220503163025-988cb79eb6c6 // indirect
