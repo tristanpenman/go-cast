@@ -159,6 +159,7 @@ func (device *Device) startAndroidMirroringSession(clientId int) {
 	device.nextPid++
 
 	session := NewSession(androidMirroringAppId, clientId, device, "Android Mirroring", uuid.New().String(), transportId)
+	session.Start()
 
 	device.Sessions[session.SessionId] = session
 	device.registerTransport(session)
@@ -169,6 +170,7 @@ func (device *Device) startChromeMirroringSession(clientId int) {
 	device.nextPid++
 
 	session := NewSession(chromeMirroringAppId, clientId, device, "Chrome Mirroring", uuid.New().String(), transportId)
+	session.Start()
 
 	device.Sessions[session.SessionId] = session
 	device.registerTransport(session)
