@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/pion/rtp"
 	"image/jpeg"
+	"io"
 	"net"
 	"os"
 
@@ -274,16 +275,21 @@ func (session *Session) Start() {
 
 			decrypter := session.decrypters[packet.SSRC]
 
+			payloadReader := bytes.NewReader(packet.Payload)
+
 			bits := int(data[12])
 			keyframe := (bits & 0x80) != 0
-			ref := (bits & 0x40) != 0
+			hasRef := (bits & 0x40) != 0
 			numExt := bits & 0x3f
 			frameId := int(data[13])
+
 			packetId := make([]byte, 2)
+			payloadReader.Seek(2, io.SeekStart)
+			binary.Read(payloadReader, binary.BigEndian, packetId)
 
 			session.log.Info("frame",
 				"keyframe", keyframe,
-				"ref", ref,
+				"hasRef", hasRef,
 				"numExt", numExt,
 				"frameId", frameId,
 				"prevFrameId", prevFrameId,
@@ -299,8 +305,33 @@ func (session *Session) Start() {
 				prevFrameId = frameId
 			}
 
-			// TODO: offset has been fudged here
-			ciphertext = append(ciphertext, packet.Payload[11:]...)
+			offset := 6
+			if hasRef {
+				payloadReader.Seek(int64(offset), io.SeekStart)
+				refId, _ := payloadReader.ReadByte()
+				session.log.Info(fmt.Sprintf("ref id: %d", refId))
+				offset++
+			}
+
+			for i := 0; i < numExt; i++ {
+				payloadReader.Seek(int64(offset), io.SeekStart)
+				typeAndSizeBytes := make([]byte, 2)
+				binary.Read(payloadReader, binary.BigEndian, typeAndSizeBytes)
+
+				typeAndSize := int(binary.BigEndian.Uint16(typeAndSizeBytes))
+				dataType := typeAndSize >> 10
+				dataSize := typeAndSize & 0x3FF
+
+				if dataType == 1 {
+					session.log.Info("ignored adaptive latency extension")
+				} else {
+					session.log.Info("ignoring unknown extension type", "dataType", dataType, "dataSize", dataSize)
+				}
+
+				offset += dataSize + 2
+			}
+
+			ciphertext = append(ciphertext, packet.Payload[offset:]...)
 		}
 
 		session.packetConn.Close()
