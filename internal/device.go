@@ -3,6 +3,7 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"image"
 
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
@@ -32,6 +33,7 @@ type Device struct {
 	Udn           string
 
 	// implementation
+	images     chan *image.RGBA
 	log        hclog.Logger
 	nextPid    int
 	transports map[string]*Transport
@@ -208,7 +210,11 @@ func (device *Device) stopApplication(sessionId string) error {
 	return nil
 }
 
-func NewDevice(deviceModel string, friendlyName string, id string, udn string) *Device {
+func (device *Device) DisplayImage(image *image.RGBA) {
+	device.images <- image
+}
+
+func NewDevice(images chan *image.RGBA, deviceModel string, friendlyName string, id string, udn string) *Device {
 	log := NewLogger(fmt.Sprintf("device (%s)", id))
 
 	// Allow clients to start Android or Chrome mirroring apps
@@ -225,6 +231,7 @@ func NewDevice(deviceModel string, friendlyName string, id string, udn string) *
 		Udn:           udn,
 
 		// implementation
+		images:     images,
 		log:        log,
 		nextPid:    1,
 		transports: make(map[string]*Transport),

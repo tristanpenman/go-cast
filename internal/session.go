@@ -287,13 +287,18 @@ func (session *Session) Start() {
 			payloadReader.Seek(2, io.SeekStart)
 			binary.Read(payloadReader, binary.BigEndian, packetId)
 
+			maxPacketId := make([]byte, 4)
+			payloadReader.Seek(4, io.SeekStart)
+			binary.Read(payloadReader, binary.BigEndian, maxPacketId)
+
 			session.log.Info("frame",
 				"keyframe", keyframe,
 				"hasRef", hasRef,
 				"numExt", numExt,
 				"frameId", frameId,
 				"prevFrameId", prevFrameId,
-				"packetId", binary.BigEndian.Uint16(packetId))
+				"packetId", binary.BigEndian.Uint16(packetId),
+				"maxPacketId", binary.BigEndian.Uint32(maxPacketId))
 
 			if frameId != prevFrameId {
 				plaintext := make([]byte, len(ciphertext))
@@ -361,6 +366,8 @@ func (session *Session) decodeBuffer(payload []byte) {
 		session.frameCount++
 
 		session.log.Info("image", "format", image.Fmt)
+
+		session.device.DisplayImage(image.ImageRGBA())
 
 		jpegBuffer := new(bytes.Buffer)
 		if err = jpeg.Encode(jpegBuffer, image.ImageYCbCr(), nil); err != nil {

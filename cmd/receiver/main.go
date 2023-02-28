@@ -2,14 +2,23 @@ package main
 
 import (
 	"flag"
-	"github.com/google/uuid"
+	"image"
+	"image/color"
+	"image/draw"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
+	// third-party
+	"github.com/go-gl/gl/v3.2-core/gl"
+	"github.com/go-gl/glfw/v3.3/glfw"
+	"github.com/google/uuid"
+
+	// internal
 	. "github.com/tristanpenman/go-cast/internal"
 )
 
@@ -61,6 +70,12 @@ func resolveManifest(certManifest string, certManifestDir string, certService st
 	return nil
 }
 
+func init() {
+	// This is needed to arrange that main() runs on main thread.
+	// See documentation for functions that are only allowed to be called from the main thread.
+	runtime.LockOSThread()
+}
+
 func main() {
 	var certManifest = flag.String("cert-manifest", "", "path to a cert manifest file")
 	var certManifestDir = flag.String("cert-manifest-dir", "", "path to a directory containing cert manifests")
@@ -104,34 +119,126 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	id := uuid.New().String()
-	udn := id
-	device := NewDevice(*deviceModel, *friendlyName, id, udn)
+	err := glfw.Init()
+	if err != nil {
+		panic(err)
+	}
+	defer glfw.Terminate()
 
-	server := NewServer(device, manifest, clientPrefix, iface, *port, &wg)
-	if server == nil {
-		return
+	glfw.WindowHint(glfw.Resizable, glfw.True)
+	glfw.WindowHint(glfw.CocoaRetinaFramebuffer, glfw.False)
+	glfw.WindowHint(glfw.ContextVersionMajor, 2)
+	glfw.WindowHint(glfw.ContextVersionMinor, 1)
+	log.Info("creating window")
+	window, err := glfw.CreateWindow(640, 480, "Testing", nil, nil)
+	if err != nil {
+		panic(err)
 	}
 
-	var advertisement *Advertisement
-	if *enableMdns {
-		advertisement = NewAdvertisement(device, *port)
-		if advertisement == nil {
-			log.Error("failed to advertise receiver")
-		}
+	window.MakeContextCurrent()
+
+	err = gl.Init()
+	if err != nil {
+		panic(err)
 	}
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+	var img = image.NewRGBA(image.Rect(0, 0, 1920, 1080))
+	mygreen := color.RGBA{0, 100, 0, 255} //  R, G, B, Alpha
+
+	// backfill entire background surface with color mygreen
+	draw.Draw(img, img.Bounds(), &image.Uniform{mygreen}, image.ZP, draw.Src)
+
+	red_rect := image.Rect(60, 80, 120, 160) //  geometry of 2nd rectangle which we draw atop above rectangle
+	myred := color.RGBA{200, 0, 0, 255}
+
+	// create a red rectangle atop the green surface
+	draw.Draw(img, red_rect, &image.Uniform{myred}, image.ZP, draw.Src)
+
+	var texture uint32
+	{
+		gl.Enable(gl.TEXTURE_2D)
+		gl.GenTextures(1, &texture)
+		gl.BindTexture(gl.TEXTURE_2D, texture)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+		gl.TexParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+		gl.TexImage2D(
+			gl.TEXTURE_2D,
+			0,
+			gl.RGBA,
+			int32(img.Rect.Size().X),
+			int32(img.Rect.Size().Y),
+			0,
+			gl.RGBA,
+			gl.UNSIGNED_BYTE,
+			gl.Ptr(img.Pix))
+	}
+
+	var framebuffer uint32
+	{
+		gl.GenFramebuffers(1, &framebuffer)
+		gl.BindFramebuffer(gl.FRAMEBUFFER, framebuffer)
+		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0)
+
+		gl.BindFramebuffer(gl.READ_FRAMEBUFFER, framebuffer)
+		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
+	}
+
+	images := make(chan *image.RGBA)
+
 	go func() {
-		<-c
-		log.Info("interrupted")
-		if advertisement != nil {
-			advertisement.Stop()
+		select {
+		case i := <-images:
+			img = i
+			glfw.PostEmptyEvent()
 		}
-		server.StopListening()
-		os.Exit(0)
 	}()
 
-	wg.Wait()
+	go func() {
+		id := uuid.New().String()
+		udn := id
+		device := NewDevice(images, *deviceModel, *friendlyName, id, udn)
+
+		server := NewServer(device, manifest, clientPrefix, iface, *port, &wg)
+		if server == nil {
+			return
+		}
+
+		var advertisement *Advertisement
+		if *enableMdns {
+			advertisement = NewAdvertisement(device, *port)
+			if advertisement == nil {
+				log.Error("failed to advertise receiver")
+			}
+		}
+
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-c
+			log.Info("interrupted")
+			if advertisement != nil {
+				advertisement.Stop()
+			}
+			server.StopListening()
+			os.Exit(0)
+		}()
+	}()
+
+	for !window.ShouldClose() {
+		var w, h = window.GetSize()
+
+		// -------------------------
+		// MODIFY OR LOAD IMAGE HERE
+		// -------------------------
+
+		gl.BindTexture(gl.TEXTURE_2D, texture)
+		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, int32(1920), int32(1080), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix))
+
+		gl.BlitFramebuffer(0, int32(1080), int32(1920), 0, 0, 0, int32(w), int32(h), gl.COLOR_BUFFER_BIT, gl.LINEAR)
+
+		window.SwapBuffers()
+		glfw.WaitEvents()
+	}
 }

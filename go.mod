@@ -4,6 +4,8 @@ go 1.18
 
 require (
 	github.com/brutella/dnssd v1.2.5
+	github.com/go-gl/gl v0.0.0-20211210172815-726fda9656d6
+	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20221017161538-93cebf72946b
 	github.com/google/uuid v1.3.0
 	github.com/grantae/certinfo v0.0.0-20170412194111-59d56a35515b
 	github.com/hashicorp/go-hclog v1.4.0
