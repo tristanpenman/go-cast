@@ -2,11 +2,13 @@ package main
 
 import (
 	"flag"
+	font2 "golang.org/x/image/font"
 	"image"
-	"image/color"
 	"image/draw"
+	"io/ioutil"
 	"os"
 	"os/signal"
+	"path"
 	"runtime"
 	"strconv"
 	"sync"
@@ -16,7 +18,10 @@ import (
 	// third-party
 	"github.com/go-gl/gl/v3.2-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
+	"github.com/golang/freetype"
+	"github.com/golang/freetype/truetype"
 	"github.com/google/uuid"
+	_ "golang.org/x/image/font"
 
 	// internal
 	. "github.com/tristanpenman/go-cast/internal"
@@ -76,7 +81,34 @@ func init() {
 	runtime.LockOSThread()
 }
 
+func loadFont(filePath string) (*truetype.Font, error) {
+	fontBytes, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	return freetype.ParseFont(fontBytes)
+}
+
+func loadImage(filePath string) (image.Image, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			log.Warn("failed to close file: " + filePath)
+		}
+	}(f)
+
+	decoded, _, err := image.Decode(f)
+	return decoded, err
+}
+
 func main() {
+	var assetsDir = flag.String("assets-dir", "assets", "path to assets directory (fonts and backdrop)")
 	var certManifest = flag.String("cert-manifest", "", "path to a cert manifest file")
 	var certManifestDir = flag.String("cert-manifest-dir", "", "path to a directory containing cert manifests")
 	var certService = flag.String("cert-service", "", "base URL for certificate service")
@@ -130,7 +162,7 @@ func main() {
 	glfw.WindowHint(glfw.ContextVersionMajor, 2)
 	glfw.WindowHint(glfw.ContextVersionMinor, 1)
 	log.Info("creating window")
-	window, err := glfw.CreateWindow(640, 480, "Testing", nil, nil)
+	window, err := glfw.CreateWindow(960, 540, "Testing", nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -142,17 +174,36 @@ func main() {
 		panic(err)
 	}
 
+	font, err := loadFont(path.Join(*assetsDir, "lato.ttf"))
+	if err != nil {
+		panic(err)
+	}
+
+	backdrop, err := loadImage(path.Join(*assetsDir, "backdrop.jpg"))
+	if err != nil {
+		panic(err)
+	}
+
 	var img = image.NewRGBA(image.Rect(0, 0, 1920, 1080))
-	mygreen := color.RGBA{0, 100, 0, 255} //  R, G, B, Alpha
 
-	// backfill entire background surface with color mygreen
-	draw.Draw(img, img.Bounds(), &image.Uniform{mygreen}, image.ZP, draw.Src)
+	c := freetype.NewContext()
+	c.SetDPI(72)
+	c.SetFont(font)
+	c.SetFontSize(60)
+	c.SetClip(img.Bounds())
+	c.SetDst(img)
+	c.SetSrc(image.White)
+	c.SetHinting(font2.HintingFull)
 
-	red_rect := image.Rect(60, 80, 120, 160) //  geometry of 2nd rectangle which we draw atop above rectangle
-	myred := color.RGBA{200, 0, 0, 255}
+	// draw backdrop
+	draw.Draw(img, img.Bounds(), backdrop, image.ZP, draw.Src)
 
-	// create a red rectangle atop the green surface
-	draw.Draw(img, red_rect, &image.Uniform{myred}, image.ZP, draw.Src)
+	// draw status
+	pt := freetype.Pt(20, 70)
+	_, err = c.DrawString("Ready to cast", pt)
+	if err != nil {
+		return
+	}
 
 	var texture uint32
 	{
