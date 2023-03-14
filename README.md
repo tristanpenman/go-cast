@@ -4,11 +4,17 @@ This project is intended to offer a complete implementation of the [Google Cast]
 
 ## Design
 
-The following architecture diagram summarises the overall design of GoCast, and how it accommodates the requirements of the Google Cast protocol:
+The following architecture diagram summarises the overall design of the GoCast Receiver app, and how it accommodates the requirements of the Google Cast protocol:
 
-![Architecture Diagram](./doc/architecture.drawio.png)
+![Receiver Architecture](./doc/receiver-architecture.drawio.png)
 
 In terms of actual code, these concepts are implemented as Go structs.
+
+The Sender architecture is somewhat simpler:
+
+![Sender Architecture](./doc/sender-architecture.drawio.png)
+
+The key difference here is that the sender app does not need to maintain multiple connections, and is designed only to launch a single app.
 
 ## Usage
 

@@ -108,11 +108,16 @@ func loadImage(filePath string) (image.Image, error) {
 }
 
 func main() {
-	var assetsDir = flag.String("assets-dir", "assets", "path to assets directory (fonts and backdrop)")
+	// local manifest location
 	var certManifest = flag.String("cert-manifest", "", "path to a cert manifest file")
 	var certManifestDir = flag.String("cert-manifest-dir", "", "path to a directory containing cert manifests")
+
+	// cloud manifest location
 	var certService = flag.String("cert-service", "", "base URL for certificate service")
 	var certServiceSalt = flag.String("cert-service-salt", "", "salt for generating cert service hash")
+
+	// general options
+	var assetsDir = flag.String("assets-dir", "assets", "path to assets directory (fonts and backdrop)")
 	var clientPrefix = flag.String("client-prefix", "", "optional client prefix, to limit connections")
 	var deviceModel = flag.String("device-model", "go-cast", "device model")
 	var enableMdns = flag.Bool("enable-mdns", false, "advertise service using mDNS")

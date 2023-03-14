@@ -13,13 +13,16 @@ import (
 )
 
 type Client struct {
-	castChannel CastChannel
-	conn        net.Conn
-	log         hclog.Logger
-	Incoming    chan *channel.CastMessage
+	castChannel  CastChannel
+	conn         net.Conn
+	deviceAuthWg *sync.WaitGroup
+	log          hclog.Logger
+	//Incoming     chan *channel.CastMessage
 }
 
-func (client *Client) sendDeviceAuthChallenge() bool {
+func (client *Client) sendDeviceAuthChallenge(deviceAuthWg *sync.WaitGroup) bool {
+	client.deviceAuthWg = deviceAuthWg
+
 	deviceAuthMessage := &channel.DeviceAuthMessage{
 		Challenge: &channel.AuthChallenge{},
 	}
@@ -47,6 +50,15 @@ func (client *Client) sendDeviceAuthChallenge() bool {
 	return client.castChannel.Send(&message)
 }
 
+func (client *Client) verifyDeviceAuthResponse(payloadBytes []byte) {
+	client.log.Info(string(payloadBytes))
+
+	if client.deviceAuthWg != nil {
+		client.deviceAuthWg.Done()
+		client.deviceAuthWg = nil
+	}
+}
+
 func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGroup) *Client {
 	var log = NewLogger("client")
 
@@ -68,11 +80,12 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 		castChannel: castChannel,
 		conn:        conn,
 		log:         log,
-		Incoming:    make(chan *channel.CastMessage),
+		//Incoming:    make(chan *channel.CastMessage),
 	}
 
 	if authChallenge {
-		client.sendDeviceAuthChallenge()
+		var deviceAuthWg sync.WaitGroup
+		client.sendDeviceAuthChallenge(&deviceAuthWg)
 	}
 
 	go func() {
@@ -88,7 +101,11 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 						}
 					}
 
-					client.Incoming <- castMessage
+					//client.Incoming <- castMessage
+
+					if *castMessage.Namespace == deviceAuthNamespace {
+						client.verifyDeviceAuthResponse(castMessage.PayloadBinary)
+					}
 				} else {
 					log.Info("channel closed")
 					_ = conn.Close()
