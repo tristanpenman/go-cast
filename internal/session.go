@@ -52,7 +52,7 @@ type SupportedStream struct {
 	AesIvMask string `json:"aesIvMask"`
 	AesKey    string `json:"aesKey"`
 	Index     int    `json:"index"`
-	Ssrc      int    `json:"ssrc"`
+	Ssrc      uint32 `json:"ssrc"`
 	Type      string `json:"type"`
 }
 
@@ -99,12 +99,12 @@ type Display struct {
 }
 
 type Answer struct {
-	CastMode             string `json:"castMode"`
-	ReceiverGetStatus    bool   `json:"receiverGetStatus"`
-	ReceiverRtcpEventLog []int  `json:"receiverRtcpEventLog"`
-	SendIndexes          []int  `json:"sendIndexes"`
-	Ssrcs                []int  `json:"ssrcs"`
-	UdpPort              int    `json:"udpPort"`
+	CastMode             string   `json:"castMode"`
+	ReceiverGetStatus    bool     `json:"receiverGetStatus"`
+	ReceiverRtcpEventLog []int    `json:"receiverRtcpEventLog"`
+	SendIndexes          []int    `json:"sendIndexes"`
+	Ssrcs                []uint32 `json:"ssrcs"`
+	UdpPort              int      `json:"udpPort"`
 }
 
 type webrtcAnswerMessage struct {
@@ -137,7 +137,7 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 
 	var receiverRtcpEventLog []int
 	var sendIndexes []int
-	var ssrcs []int
+	var ssrcs []uint32
 
 	for _, supportedStream := range request.Offer.SupportedStreams {
 		if supportedStream.Type == "video_source" {
@@ -149,7 +149,8 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 			iv, _ := hex.DecodeString(supportedStream.AesIvMask)
 
 			decrypter := NewDecrypter(key, iv)
-			ssrc := uint32(supportedStream.Ssrc)
+			ssrc := supportedStream.Ssrc
+
 			decode := func(buffer []byte, nextFrameId int) {
 				plaintext := make([]byte, len(buffer))
 				session.log.Info(fmt.Sprintf("decrypting %d bytes", len(buffer)), "frame id", nextFrameId)
@@ -158,7 +159,12 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 				decrypter.Reset(nextFrameId)
 			}
 
-			session.streams[ssrc] = NewStream(decode, NewLogger(fmt.Sprintf("stream (%d)", supportedStream.Ssrc)))
+			sendRtcp := func(buffer []byte, addr net.Addr) {
+				session.packetConn.WriteTo(buffer, addr)
+			}
+
+			logger := NewLogger(fmt.Sprintf("stream (%d)", supportedStream.Ssrc))
+			session.streams[ssrc] = NewStream(decode, logger, sendRtcp, supportedStream.Ssrc)
 		}
 	}
 
@@ -245,7 +251,7 @@ func (session *Session) Start() {
 		data := make([]byte, 200000)
 
 		for {
-			count, _, err := session.packetConn.ReadFrom(data)
+			count, addr, err := session.packetConn.ReadFrom(data)
 			if session.stopping {
 				session.log.Info("stopping udp listener")
 				break
@@ -283,7 +289,7 @@ func (session *Session) Start() {
 					continue
 				}
 
-				stream.handleRtcpPackets(rtcpPackets)
+				stream.handleRtcpPackets(rtcpPackets, addr)
 			} else {
 				// data
 				stream := session.streams[packet.SSRC]

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"net"
 
 	// third-party
 	"github.com/hashicorp/go-hclog"
@@ -28,17 +29,23 @@ type Stream struct {
 	buffer         []byte
 	currentFrameId int
 	decode         func([]byte, int)
-	highestSeq     int
+	highestSeq     uint16
 	log            hclog.Logger
 	nextSeq        int
 	newFrameId     int
 	packetsQueue   map[uint16]*rtp.Packet
 	prevFrameId    int
+	sendRtcp       func([]byte, net.Addr)
+	ssrc           uint32
 }
 
 func (stream *Stream) enqueuePacket(packet *rtp.Packet) {
 	stream.packetsQueue[packet.SequenceNumber] = packet
 	stream.log.Info("enqueued packet", "sequenceNumber", packet.SequenceNumber)
+
+	if packet.SequenceNumber > stream.highestSeq {
+		stream.highestSeq = packet.SequenceNumber
+	}
 }
 
 func (stream *Stream) nextPacket() *rtp.Packet {
@@ -122,14 +129,14 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet) {
 	stream.buffer = append(stream.buffer, packet.Payload[offset:]...)
 }
 
-func (stream *Stream) handleRtcpPackets(packets []rtcp.Packet) {
+func (stream *Stream) handleRtcpPackets(packets []rtcp.Packet, addr net.Addr) {
 	stream.log.Info("received rtcp packets", "len", len(packets))
 
 	for _, packet := range packets {
-		switch packet.(type) {
-		case *rtcp.CompoundPacket:
-			break
-		case *rtcp.PictureLossIndication:
+		switch p := packet.(type) {
+		case *rtcp.SenderReport:
+			stream.log.Info("received sender report")
+			stream.sendReceiverReport(addr, p.NTPTime)
 			break
 		default:
 			break
@@ -140,16 +147,38 @@ func (stream *Stream) handleRtcpPackets(packets []rtcp.Packet) {
 
 }
 
-func NewStream(decode func([]byte, int), log hclog.Logger) *Stream {
+func (stream *Stream) sendReceiverReport(addr net.Addr, time uint64) {
+	reports := make([]rtcp.ReceptionReport, 1)
+	reports[0].SSRC = stream.ssrc
+	reports[0].LastSenderReport = ExtractMiddleBits(time)
+	reports[0].LastSequenceNumber = uint32(stream.highestSeq)
+
+	report := rtcp.ReceiverReport{
+		SSRC:              stream.ssrc + 1,
+		Reports:           reports,
+		ProfileExtensions: nil,
+	}
+
+	bytes, err := report.Marshal()
+	if err != nil {
+		return
+	}
+
+	stream.sendRtcp(bytes, addr)
+}
+
+func NewStream(decode func([]byte, int), log hclog.Logger, sendRtcp func([]byte, net.Addr), ssrc uint32) *Stream {
 	return &Stream{
 		buffer:         make([]byte, 0),
 		currentFrameId: -1,
 		decode:         decode,
-		highestSeq:     -1,
+		highestSeq:     0,
 		log:            log,
 		nextSeq:        -1,
 		newFrameId:     -1,
 		packetsQueue:   make(map[uint16]*rtp.Packet),
 		prevFrameId:    0,
+		sendRtcp:       sendRtcp,
+		ssrc:           ssrc,
 	}
 }
