@@ -44,15 +44,15 @@ func resolveManifest(certManifest string, certManifestDir string, certService st
 	if certManifestDir != "" {
 		log.Info("attempting to find manifest in directory: " + certManifestDir)
 
-		path, err := MakeCertManifestPath(certManifestDir, strconv.FormatInt(time.Now().Unix(), 10))
+		manifestPath, err := MakeCertManifestPath(certManifestDir, strconv.FormatInt(time.Now().Unix(), 10))
 		if err != nil {
 			log.Error("failed to make cert manifest path: " + err.Error())
 		}
 
-		if path != nil {
-			log.Info("attempting to read manifest from file: " + *path)
+		if manifestPath != nil {
+			log.Info("attempting to read manifest from file: " + *manifestPath)
 
-			manifest, err := ReadManifest(log, *path, fixNewlines)
+			manifest, err := ReadManifest(log, *manifestPath, fixNewlines)
 			if err == nil {
 				return manifest
 			}
