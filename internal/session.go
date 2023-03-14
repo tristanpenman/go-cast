@@ -27,11 +27,13 @@ type Session struct {
 	StatusText  string
 
 	// implementation
+	ciphertext  []byte
 	decrypters  map[uint32]*Decrypter
 	device      *Device
 	frameCount  int
 	log         hclog.Logger
 	packetConn  net.PacketConn
+	prevFrameId int
 	stop        chan struct{}
 	stopping    bool
 	transportId string
@@ -238,9 +240,6 @@ func (session *Session) Start() {
 
 	go func() {
 		data := make([]byte, 200000)
-		prevFrameId := 0
-
-		ciphertext := make([]byte, 0)
 
 		for {
 			count, _, err := session.packetConn.ReadFrom(data)
@@ -261,82 +260,18 @@ func (session *Session) Start() {
 				return
 			}
 
-			session.log.Info("payload", "payloadType", packet.PayloadType)
-
-			if packet.PayloadType == 72 {
-				// rtcp: ignore for now
-				continue
+			switch packet.PayloadType {
+			case 72:
+				session.handleRtcp(packet)
+				break
+			case 96:
+				session.handleVideo(packet)
+				break
+			default:
+				session.log.Warn("unknown payload type", "payloadType", packet.PayloadType)
+				break
 			}
 
-			if packet.PayloadType != 96 {
-				// ignore audio packets
-				continue
-			}
-
-			decrypter := session.decrypters[packet.SSRC]
-
-			payloadReader := bytes.NewReader(packet.Payload)
-
-			bits := int(data[12])
-			keyframe := (bits & 0x80) != 0
-			hasRef := (bits & 0x40) != 0
-			numExt := bits & 0x3f
-			frameId := int(data[13])
-
-			packetId := make([]byte, 2)
-			payloadReader.Seek(2, io.SeekStart)
-			binary.Read(payloadReader, binary.BigEndian, packetId)
-
-			maxPacketId := make([]byte, 4)
-			payloadReader.Seek(4, io.SeekStart)
-			binary.Read(payloadReader, binary.BigEndian, maxPacketId)
-
-			session.log.Info("frame",
-				"keyframe", keyframe,
-				"hasRef", hasRef,
-				"numExt", numExt,
-				"frameId", frameId,
-				"prevFrameId", prevFrameId,
-				"packetId", binary.BigEndian.Uint16(packetId),
-				"maxPacketId", binary.BigEndian.Uint32(maxPacketId))
-
-			if frameId != prevFrameId {
-				plaintext := make([]byte, len(ciphertext))
-				session.log.Info(fmt.Sprintf("decrypting %d bytes", len(ciphertext)))
-				decrypter.Decrypt(ciphertext, plaintext)
-				session.decodeBuffer(plaintext)
-				decrypter.Reset(frameId)
-				ciphertext = make([]byte, 0)
-				prevFrameId = frameId
-			}
-
-			offset := 6
-			if hasRef {
-				payloadReader.Seek(int64(offset), io.SeekStart)
-				refId, _ := payloadReader.ReadByte()
-				session.log.Info(fmt.Sprintf("ref id: %d", refId))
-				offset++
-			}
-
-			for i := 0; i < numExt; i++ {
-				payloadReader.Seek(int64(offset), io.SeekStart)
-				typeAndSizeBytes := make([]byte, 2)
-				binary.Read(payloadReader, binary.BigEndian, typeAndSizeBytes)
-
-				typeAndSize := int(binary.BigEndian.Uint16(typeAndSizeBytes))
-				dataType := typeAndSize >> 10
-				dataSize := typeAndSize & 0x3FF
-
-				if dataType == 1 {
-					session.log.Info("ignored adaptive latency extension")
-				} else {
-					session.log.Info("ignoring unknown extension type", "dataType", dataType, "dataSize", dataSize)
-				}
-
-				offset += dataSize + 2
-			}
-
-			ciphertext = append(ciphertext, packet.Payload[offset:]...)
 		}
 
 		session.packetConn.Close()
@@ -394,6 +329,88 @@ func (session *Session) decodeBuffer(payload []byte) {
 	}
 }
 
+func (session *Session) handleAudio(packet *rtp.Packet) {
+	// TODO
+	session.log.Info("received audio packet",
+		"length", len(packet.Payload))
+}
+
+func (session *Session) handleRtcp(packet *rtp.Packet) {
+	// TODO
+	session.log.Info("received rtcp packet",
+		"length", len(packet.Payload))
+
+	// make a fake sender report
+
+}
+
+func (session *Session) handleVideo(packet *rtp.Packet) {
+	decrypter := session.decrypters[packet.SSRC]
+
+	payloadReader := bytes.NewReader(packet.Payload)
+
+	bits := int(packet.Payload[0])
+	keyframe := (bits & 0x80) != 0
+	hasRef := (bits & 0x40) != 0
+	numExt := bits & 0x3f
+	frameId := int(packet.Payload[1])
+
+	packetId := make([]byte, 2)
+	payloadReader.Seek(2, io.SeekStart)
+	binary.Read(payloadReader, binary.BigEndian, packetId)
+
+	maxPacketId := make([]byte, 4)
+	payloadReader.Seek(4, io.SeekStart)
+	binary.Read(payloadReader, binary.BigEndian, maxPacketId)
+
+	session.log.Info("frame",
+		"keyframe", keyframe,
+		"hasRef", hasRef,
+		"numExt", numExt,
+		"frameId", frameId,
+		"prevFrameId", session.prevFrameId,
+		"packetId", binary.BigEndian.Uint16(packetId),
+		"maxPacketId", binary.BigEndian.Uint32(maxPacketId))
+
+	if frameId != session.prevFrameId {
+		plaintext := make([]byte, len(session.ciphertext))
+		session.log.Info(fmt.Sprintf("decrypting %d bytes", len(session.ciphertext)))
+		decrypter.Decrypt(session.ciphertext, plaintext)
+		session.decodeBuffer(plaintext)
+		decrypter.Reset(frameId)
+		session.ciphertext = make([]byte, 0)
+		session.prevFrameId = frameId
+	}
+
+	offset := 6
+	if hasRef {
+		payloadReader.Seek(int64(offset), io.SeekStart)
+		refId, _ := payloadReader.ReadByte()
+		session.log.Info(fmt.Sprintf("ref id: %d", refId))
+		offset++
+	}
+
+	for i := 0; i < numExt; i++ {
+		payloadReader.Seek(int64(offset), io.SeekStart)
+		typeAndSizeBytes := make([]byte, 2)
+		binary.Read(payloadReader, binary.BigEndian, typeAndSizeBytes)
+
+		typeAndSize := int(binary.BigEndian.Uint16(typeAndSizeBytes))
+		dataType := typeAndSize >> 10
+		dataSize := typeAndSize & 0x3FF
+
+		if dataType == 1 {
+			session.log.Info("ignored adaptive latency extension")
+		} else {
+			session.log.Info("ignoring unknown extension type", "dataType", dataType, "dataSize", dataSize)
+		}
+
+		offset += dataSize + 2
+	}
+
+	session.ciphertext = append(session.ciphertext, packet.Payload[offset:]...)
+}
+
 func NewSession(appId string, clientId int, device *Device, displayName string, sessionId string, transportId string) *Session {
 	log := NewLogger(fmt.Sprintf("session (%d) [%s]", clientId, sessionId))
 
@@ -419,10 +436,12 @@ func NewSession(appId string, clientId int, device *Device, displayName string, 
 		StatusText:  "",
 
 		// implementation
+		ciphertext:  make([]byte, 0),
 		decrypters:  make(map[uint32]*Decrypter),
 		device:      device,
 		log:         log,
 		packetConn:  packetConn,
+		prevFrameId: 0,
 		stop:        stop,
 		stopping:    false,
 		transportId: transportId,
