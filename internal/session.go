@@ -143,7 +143,7 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 		if supportedStream.Type == "video_source" {
 			receiverRtcpEventLog = append(receiverRtcpEventLog, supportedStream.Index)
 			sendIndexes = append(sendIndexes, supportedStream.Index)
-			ssrcs = append(ssrcs, supportedStream.Ssrc)
+			ssrcs = append(ssrcs, supportedStream.Ssrc+1)
 
 			key, _ := hex.DecodeString(supportedStream.AesKey)
 			iv, _ := hex.DecodeString(supportedStream.AesIvMask)
@@ -301,7 +301,7 @@ func (session *Session) Start() {
 				stream.enqueuePacket(packet)
 				nextPacket := stream.nextPacket()
 				for nextPacket != nil {
-					stream.handleDataPacket(nextPacket)
+					stream.handleDataPacket(nextPacket, addr)
 					nextPacket = stream.nextPacket()
 				}
 			}

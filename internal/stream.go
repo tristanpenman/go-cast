@@ -62,7 +62,7 @@ func (stream *Stream) nextPacket() *rtp.Packet {
 	return nil
 }
 
-func (stream *Stream) handleDataPacket(packet *rtp.Packet) {
+func (stream *Stream) handleDataPacket(packet *rtp.Packet, addr net.Addr) {
 	bits := int(packet.Payload[0])
 	keyframe := (bits & 0x80) != 0
 	hasRef := (bits & 0x40) != 0
@@ -98,6 +98,7 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet) {
 		stream.decode(stream.buffer, frameId)
 		stream.buffer = make([]byte, 0)
 		stream.prevFrameId = frameId
+		stream.sendPSFB(addr)
 	}
 
 	offset := 6
@@ -145,6 +146,10 @@ func (stream *Stream) handleRtcpPackets(packets []rtcp.Packet, addr net.Addr) {
 
 	// make a fake sender report
 
+}
+
+func (stream *Stream) sendPSFB(net.Addr) {
+	// TODO
 }
 
 func (stream *Stream) sendReceiverReport(addr net.Addr, time uint64) {
