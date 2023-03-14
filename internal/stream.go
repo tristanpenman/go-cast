@@ -88,7 +88,7 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet) {
 		"maxPacketId", maxPacketId)
 
 	if frameId != stream.prevFrameId {
-		stream.decode(stream.buffer, stream.prevFrameId)
+		stream.decode(stream.buffer, frameId)
 		stream.buffer = make([]byte, 0)
 		stream.prevFrameId = frameId
 	}

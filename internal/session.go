@@ -149,17 +149,13 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 			iv, _ := hex.DecodeString(supportedStream.AesIvMask)
 
 			decrypter := NewDecrypter(key, iv)
-
-			session.log.Info("registering decrypter", "ssrc", supportedStream.Ssrc)
-
 			ssrc := uint32(supportedStream.Ssrc)
-
-			decode := func(buffer []byte, frameId int) {
+			decode := func(buffer []byte, nextFrameId int) {
 				plaintext := make([]byte, len(buffer))
-				session.log.Info(fmt.Sprintf("decrypting %d bytes", len(buffer)))
+				session.log.Info(fmt.Sprintf("decrypting %d bytes", len(buffer)), "frame id", nextFrameId)
 				decrypter.Decrypt(buffer, plaintext)
 				session.decodeBuffer(plaintext)
-				decrypter.Reset(frameId)
+				decrypter.Reset(nextFrameId)
 			}
 
 			session.streams[ssrc] = NewStream(decode, NewLogger(fmt.Sprintf("stream (%d)", supportedStream.Ssrc)))
