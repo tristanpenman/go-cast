@@ -2,36 +2,23 @@ package internal
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/pion/rtp"
 	"image/jpeg"
-	"io"
 	"net"
 	"os"
 	"path"
 
 	// third-party
 	"github.com/hashicorp/go-hclog"
+	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/xlab/libvpx-go/vpx"
 
 	// internal
 	"github.com/tristanpenman/go-cast/internal/channel"
 )
-
-type packetInfo struct {
-	keyframe    bool
-	hasRef      bool
-	numExt      int
-	frameId     int
-	packetId    uint16
-	maxPacketId uint32
-	payload     []byte
-	ssrc        uint32
-	seq         uint16
-}
 
 type Session struct {
 	AppId       string
@@ -40,25 +27,16 @@ type Session struct {
 	StatusText  string
 
 	// implementation
-	ciphertext     []byte
-	currentFrameId int
-	decrypters     map[uint32]*Decrypter
-	device         *Device
-	frameCount     int
-	log            hclog.Logger
-	nextSeq        int
-	packetConn     net.PacketConn
-	prevFrameId    int
-	stop           chan struct{}
-	stopping       bool
-	transportId    string
-	videoPackets   map[uint16]*packetInfo
-	vpxCtx         *vpx.CodecCtx
-	vpxIface       *vpx.CodecIface
-
-	// receiver report
-	highestSeq int
-	newFrameId int
+	device      *Device
+	frameCount  int
+	log         hclog.Logger
+	packetConn  net.PacketConn
+	streams     map[uint32]*Stream
+	stop        chan struct{}
+	stopping    bool
+	transportId string
+	vpxCtx      *vpx.CodecCtx
+	vpxIface    *vpx.CodecIface
 }
 
 func (session *Session) GetPort() int {
@@ -175,7 +153,16 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 			session.log.Info("registering decrypter", "ssrc", supportedStream.Ssrc)
 
 			ssrc := uint32(supportedStream.Ssrc)
-			session.decrypters[ssrc] = decrypter
+
+			decode := func(buffer []byte, frameId int) {
+				plaintext := make([]byte, len(buffer))
+				session.log.Info(fmt.Sprintf("decrypting %d bytes", len(buffer)))
+				decrypter.Decrypt(buffer, plaintext)
+				session.decodeBuffer(plaintext)
+				decrypter.Reset(frameId)
+			}
+
+			session.streams[ssrc] = NewStream(decode, NewLogger(fmt.Sprintf("stream (%d)", supportedStream.Ssrc)))
 		}
 	}
 
@@ -280,23 +267,42 @@ func (session *Session) Start() {
 				return
 			}
 
-			switch packet.PayloadType {
-			case 72:
-				session.handleRtcp(packet)
-				break
-			case 96:
-				session.enqueuePacket(packet)
-				packetInfo := session.nextPacket()
-				for packetInfo != nil {
-					session.handleVideo(packetInfo)
-					packetInfo = session.nextPacket()
+			if packet.PayloadType == 72 {
+				// rtcp
+				rtcpPackets, err := rtcp.Unmarshal(data[:count])
+				if err != nil {
+					session.log.Warn("error while unmarshalling rtcp")
+					return
 				}
-				break
-			default:
-				session.log.Warn("unknown payload type", "payloadType", packet.PayloadType)
-				break
-			}
 
+				if len(rtcpPackets) == 0 {
+					session.log.Warn("expected at least one rtcp packet")
+					continue
+				}
+
+				// TODO
+				stream := session.streams[rtcpPackets[0].DestinationSSRC()[0]]
+				if stream == nil {
+					session.log.Warn("stream not found", "ssrc", packet.SSRC, "seq", packet.SequenceNumber, "type", packet.PayloadType)
+					continue
+				}
+
+				stream.handleRtcpPackets(rtcpPackets)
+			} else {
+				// data
+				stream := session.streams[packet.SSRC]
+				if stream == nil {
+					session.log.Warn("stream not found", "ssrc", packet.SSRC, "seq", packet.SequenceNumber, "type", packet.PayloadType)
+					continue
+				}
+
+				stream.enqueuePacket(packet)
+				nextPacket := stream.nextPacket()
+				for nextPacket != nil {
+					stream.handleDataPacket(nextPacket)
+					nextPacket = stream.nextPacket()
+				}
+			}
 		}
 
 		session.packetConn.Close()
@@ -355,121 +361,10 @@ func (session *Session) decodeBuffer(payload []byte) {
 	}
 }
 
-func (session *Session) handleAudio(packet *rtp.Packet) {
-	// TODO
-	session.log.Info("received audio packet",
-		"length", len(packet.Payload))
-}
-
-func (session *Session) handleRtcp(packet *rtp.Packet) {
-	// TODO
-	session.log.Info("received rtcp packet",
-		"length", len(packet.Payload))
-
-	// make a fake sender report
-
-}
-
-func (session *Session) enqueuePacket(packet *rtp.Packet) {
-	bits := int(packet.Payload[0])
-
-	payloadReader := bytes.NewReader(packet.Payload)
-
-	packetId := make([]byte, 2)
-	payloadReader.Seek(2, io.SeekStart)
-	binary.Read(payloadReader, binary.BigEndian, packetId)
-
-	maxPacketId := make([]byte, 4)
-	payloadReader.Seek(4, io.SeekStart)
-	binary.Read(payloadReader, binary.BigEndian, maxPacketId)
-
-	packetInfo := &packetInfo{
-		keyframe:    (bits & 0x80) != 0,
-		hasRef:      (bits & 0x40) != 0,
-		numExt:      bits & 0x3f,
-		frameId:     int(packet.Payload[1]),
-		packetId:    binary.BigEndian.Uint16(packetId),
-		maxPacketId: binary.BigEndian.Uint32(maxPacketId),
-		payload:     packet.Payload,
-		seq:         packet.SequenceNumber,
-		ssrc:        packet.SSRC,
-	}
-
-	session.videoPackets[packet.SequenceNumber] = packetInfo
-	session.log.Info("enqueued packet", "sequenceNumber", packet.SequenceNumber)
-}
-
-func (session *Session) nextPacket() *packetInfo {
-	for seq := range session.videoPackets {
-		if int(seq) == session.nextSeq || session.nextSeq == -1 {
-			packetInfo := session.videoPackets[seq]
-			delete(session.videoPackets, seq)
-			session.nextSeq = int(seq + 1)
-			session.log.Info("dequeueing packet", "sequenceNumber", packetInfo.seq, "packetId", packetInfo.packetId)
-			return packetInfo
-		}
-	}
-
-	return nil
-}
-
-func (session *Session) handleVideo(packetInfo *packetInfo) {
-	decrypter := session.decrypters[packetInfo.ssrc]
-
-	payloadReader := bytes.NewReader(packetInfo.payload)
-
-	session.log.Info("frame",
-		"keyframe", packetInfo.keyframe,
-		"hasRef", packetInfo.hasRef,
-		"numExt", packetInfo.numExt,
-		"frameId", packetInfo.frameId,
-		"prevFrameId", session.prevFrameId,
-		"packetId", packetInfo.packetId,
-		"maxPacketId", packetInfo.maxPacketId)
-
-	if packetInfo.frameId != session.prevFrameId {
-		plaintext := make([]byte, len(session.ciphertext))
-		session.log.Info(fmt.Sprintf("decrypting %d bytes", len(session.ciphertext)))
-		decrypter.Decrypt(session.ciphertext, plaintext)
-		session.decodeBuffer(plaintext)
-		decrypter.Reset(packetInfo.frameId)
-		session.ciphertext = make([]byte, 0)
-		session.prevFrameId = packetInfo.frameId
-	}
-
-	offset := 6
-	if packetInfo.hasRef {
-		payloadReader.Seek(int64(offset), io.SeekStart)
-		refId, _ := payloadReader.ReadByte()
-		session.log.Info(fmt.Sprintf("ref id: %d", refId))
-		offset++
-	}
-
-	for i := 0; i < packetInfo.numExt; i++ {
-		payloadReader.Seek(int64(offset), io.SeekStart)
-		typeAndSizeBytes := make([]byte, 2)
-		binary.Read(payloadReader, binary.BigEndian, typeAndSizeBytes)
-
-		typeAndSize := int(binary.BigEndian.Uint16(typeAndSizeBytes))
-		dataType := typeAndSize >> 10
-		dataSize := typeAndSize & 0x3FF
-
-		if dataType == 1 {
-			session.log.Info("ignored adaptive latency extension")
-		} else {
-			session.log.Info("ignoring unknown extension type", "dataType", dataType, "dataSize", dataSize)
-		}
-
-		offset += dataSize + 2
-	}
-
-	session.ciphertext = append(session.ciphertext, packetInfo.payload[offset:]...)
-}
-
 func NewSession(appId string, clientId int, device *Device, displayName string, sessionId string, transportId string) *Session {
 	log := NewLogger(fmt.Sprintf("session (%d) [%s]", clientId, sessionId))
 
-	packetConn, err := net.ListenPacket("udp", ":0")
+	packetConn, err := net.ListenPacket("udp", ":50000")
 	if err != nil {
 		return nil
 	}
@@ -490,25 +385,17 @@ func NewSession(appId string, clientId int, device *Device, displayName string, 
 		SessionId:   sessionId,
 		StatusText:  "",
 
-		// implementation
-		ciphertext:     make([]byte, 0),
-		currentFrameId: -1,
-		decrypters:     make(map[uint32]*Decrypter),
-		device:         device,
-		log:            log,
-		nextSeq:        -1,
-		packetConn:     packetConn,
-		prevFrameId:    0,
-		stop:           stop,
-		stopping:       false,
-		transportId:    transportId,
-		videoPackets:   make(map[uint16]*packetInfo),
-		vpxCtx:         vpxCtx,
-		vpxIface:       vpxIface,
-
-		// receiver report
-		highestSeq: -1,
-		newFrameId: -1,
+		// internal
+		device:      device,
+		frameCount:  0,
+		log:         log,
+		packetConn:  packetConn,
+		stop:        stop,
+		stopping:    false,
+		streams:     make(map[uint32]*Stream),
+		transportId: transportId,
+		vpxCtx:      vpxCtx,
+		vpxIface:    vpxIface,
 	}
 
 	return &session
