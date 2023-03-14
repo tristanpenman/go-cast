@@ -20,6 +20,18 @@ import (
 	"github.com/tristanpenman/go-cast/internal/channel"
 )
 
+type packetInfo struct {
+	keyframe    bool
+	hasRef      bool
+	numExt      int
+	frameId     int
+	packetId    uint16
+	maxPacketId uint32
+	payload     []byte
+	ssrc        uint32
+	seq         uint16
+}
+
 type Session struct {
 	AppId       string
 	DisplayName string
@@ -27,18 +39,25 @@ type Session struct {
 	StatusText  string
 
 	// implementation
-	ciphertext  []byte
-	decrypters  map[uint32]*Decrypter
-	device      *Device
-	frameCount  int
-	log         hclog.Logger
-	packetConn  net.PacketConn
-	prevFrameId int
-	stop        chan struct{}
-	stopping    bool
-	transportId string
-	vpxCtx      *vpx.CodecCtx
-	vpxIface    *vpx.CodecIface
+	ciphertext     []byte
+	currentFrameId int
+	decrypters     map[uint32]*Decrypter
+	device         *Device
+	frameCount     int
+	log            hclog.Logger
+	nextSeq        int
+	packetConn     net.PacketConn
+	prevFrameId    int
+	stop           chan struct{}
+	stopping       bool
+	transportId    string
+	videoPackets   map[uint16]*packetInfo
+	vpxCtx         *vpx.CodecCtx
+	vpxIface       *vpx.CodecIface
+
+	// receiver report
+	highestSeq int
+	newFrameId int
 }
 
 func (session *Session) GetPort() int {
@@ -265,7 +284,12 @@ func (session *Session) Start() {
 				session.handleRtcp(packet)
 				break
 			case 96:
-				session.handleVideo(packet)
+				session.enqueuePacket(packet)
+				packetInfo := session.nextPacket()
+				for packetInfo != nil {
+					session.handleVideo(packetInfo)
+					packetInfo = session.nextPacket()
+				}
 				break
 			default:
 				session.log.Warn("unknown payload type", "payloadType", packet.PayloadType)
@@ -344,16 +368,10 @@ func (session *Session) handleRtcp(packet *rtp.Packet) {
 
 }
 
-func (session *Session) handleVideo(packet *rtp.Packet) {
-	decrypter := session.decrypters[packet.SSRC]
+func (session *Session) enqueuePacket(packet *rtp.Packet) {
+	bits := int(packet.Payload[0])
 
 	payloadReader := bytes.NewReader(packet.Payload)
-
-	bits := int(packet.Payload[0])
-	keyframe := (bits & 0x80) != 0
-	hasRef := (bits & 0x40) != 0
-	numExt := bits & 0x3f
-	frameId := int(packet.Payload[1])
 
 	packetId := make([]byte, 2)
 	payloadReader.Seek(2, io.SeekStart)
@@ -363,34 +381,69 @@ func (session *Session) handleVideo(packet *rtp.Packet) {
 	payloadReader.Seek(4, io.SeekStart)
 	binary.Read(payloadReader, binary.BigEndian, maxPacketId)
 
-	session.log.Info("frame",
-		"keyframe", keyframe,
-		"hasRef", hasRef,
-		"numExt", numExt,
-		"frameId", frameId,
-		"prevFrameId", session.prevFrameId,
-		"packetId", binary.BigEndian.Uint16(packetId),
-		"maxPacketId", binary.BigEndian.Uint32(maxPacketId))
+	packetInfo := &packetInfo{
+		keyframe:    (bits & 0x80) != 0,
+		hasRef:      (bits & 0x40) != 0,
+		numExt:      bits & 0x3f,
+		frameId:     int(packet.Payload[1]),
+		packetId:    binary.BigEndian.Uint16(packetId),
+		maxPacketId: binary.BigEndian.Uint32(maxPacketId),
+		payload:     packet.Payload,
+		seq:         packet.SequenceNumber,
+		ssrc:        packet.SSRC,
+	}
 
-	if frameId != session.prevFrameId {
+	session.videoPackets[packet.SequenceNumber] = packetInfo
+	session.log.Info("enqueued packet", "sequenceNumber", packet.SequenceNumber)
+}
+
+func (session *Session) nextPacket() *packetInfo {
+	for seq := range session.videoPackets {
+		if int(seq) == session.nextSeq || session.nextSeq == -1 {
+			packetInfo := session.videoPackets[seq]
+			delete(session.videoPackets, seq)
+			session.nextSeq = int(seq + 1)
+			session.log.Info("dequeueing packet", "sequenceNumber", packetInfo.seq, "packetId", packetInfo.packetId)
+			return packetInfo
+		}
+	}
+
+	return nil
+}
+
+func (session *Session) handleVideo(packetInfo *packetInfo) {
+	decrypter := session.decrypters[packetInfo.ssrc]
+
+	payloadReader := bytes.NewReader(packetInfo.payload)
+
+	session.log.Info("frame",
+		"keyframe", packetInfo.keyframe,
+		"hasRef", packetInfo.hasRef,
+		"numExt", packetInfo.numExt,
+		"frameId", packetInfo.frameId,
+		"prevFrameId", session.prevFrameId,
+		"packetId", packetInfo.packetId,
+		"maxPacketId", packetInfo.maxPacketId)
+
+	if packetInfo.frameId != session.prevFrameId {
 		plaintext := make([]byte, len(session.ciphertext))
 		session.log.Info(fmt.Sprintf("decrypting %d bytes", len(session.ciphertext)))
 		decrypter.Decrypt(session.ciphertext, plaintext)
 		session.decodeBuffer(plaintext)
-		decrypter.Reset(frameId)
+		decrypter.Reset(packetInfo.frameId)
 		session.ciphertext = make([]byte, 0)
-		session.prevFrameId = frameId
+		session.prevFrameId = packetInfo.frameId
 	}
 
 	offset := 6
-	if hasRef {
+	if packetInfo.hasRef {
 		payloadReader.Seek(int64(offset), io.SeekStart)
 		refId, _ := payloadReader.ReadByte()
 		session.log.Info(fmt.Sprintf("ref id: %d", refId))
 		offset++
 	}
 
-	for i := 0; i < numExt; i++ {
+	for i := 0; i < packetInfo.numExt; i++ {
 		payloadReader.Seek(int64(offset), io.SeekStart)
 		typeAndSizeBytes := make([]byte, 2)
 		binary.Read(payloadReader, binary.BigEndian, typeAndSizeBytes)
@@ -408,7 +461,7 @@ func (session *Session) handleVideo(packet *rtp.Packet) {
 		offset += dataSize + 2
 	}
 
-	session.ciphertext = append(session.ciphertext, packet.Payload[offset:]...)
+	session.ciphertext = append(session.ciphertext, packetInfo.payload[offset:]...)
 }
 
 func NewSession(appId string, clientId int, device *Device, displayName string, sessionId string, transportId string) *Session {
@@ -436,17 +489,24 @@ func NewSession(appId string, clientId int, device *Device, displayName string, 
 		StatusText:  "",
 
 		// implementation
-		ciphertext:  make([]byte, 0),
-		decrypters:  make(map[uint32]*Decrypter),
-		device:      device,
-		log:         log,
-		packetConn:  packetConn,
-		prevFrameId: 0,
-		stop:        stop,
-		stopping:    false,
-		transportId: transportId,
-		vpxCtx:      vpxCtx,
-		vpxIface:    vpxIface,
+		ciphertext:     make([]byte, 0),
+		currentFrameId: -1,
+		decrypters:     make(map[uint32]*Decrypter),
+		device:         device,
+		log:            log,
+		nextSeq:        -1,
+		packetConn:     packetConn,
+		prevFrameId:    0,
+		stop:           stop,
+		stopping:       false,
+		transportId:    transportId,
+		videoPackets:   make(map[uint16]*packetInfo),
+		vpxCtx:         vpxCtx,
+		vpxIface:       vpxIface,
+
+		// receiver report
+		highestSeq: -1,
+		newFrameId: -1,
 	}
 
 	return &session
