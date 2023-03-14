@@ -244,10 +244,13 @@ func main() {
 	images := make(chan *image.RGBA)
 
 	go func() {
-		select {
-		case i := <-images:
-			img = i
-			glfw.PostEmptyEvent()
+		for {
+			select {
+			case i := <-images:
+				img = i
+				log.Info("received image")
+				glfw.PostEmptyEvent()
+			}
 		}
 	}()
 
