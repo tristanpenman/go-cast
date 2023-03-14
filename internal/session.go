@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path"
 
 	// third-party
 	"github.com/hashicorp/go-hclog"
@@ -334,7 +335,8 @@ func (session *Session) decodeBuffer(payload []byte) {
 			return
 		}
 
-		fo, err := os.Create(fmt.Sprintf("%d%s", session.frameCount, ".jpg"))
+		jpegPath := path.Join("tmp", fmt.Sprintf("%d%s", session.frameCount, ".jpg"))
+		fo, err := os.Create(jpegPath)
 		if err != nil {
 			session.log.Error("failed to create image: " + err.Error())
 			return
