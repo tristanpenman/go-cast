@@ -30,7 +30,7 @@ type Stream struct {
 
 func (stream *Stream) enqueuePacket(packet *rtp.Packet) {
 	stream.packetsQueue[packet.SequenceNumber] = packet
-	stream.log.Info("enqueued packet", "sequenceNumber", packet.SequenceNumber)
+	stream.log.Debug("enqueued packet", "sequenceNumber", packet.SequenceNumber)
 
 	if packet.SequenceNumber > stream.highestSeq {
 		stream.highestSeq = packet.SequenceNumber
@@ -43,7 +43,7 @@ func (stream *Stream) nextPacket() *rtp.Packet {
 			packet := stream.packetsQueue[seq]
 			delete(stream.packetsQueue, seq)
 			stream.nextSeq = int(seq + 1)
-			stream.log.Info("dequeueing packet", "sequenceNumber", seq)
+			stream.log.Debug("next packet", "sequenceNumber", seq)
 			return packet
 		}
 	}
