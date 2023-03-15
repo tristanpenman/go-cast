@@ -13,18 +13,6 @@ import (
 	"github.com/pion/rtp"
 )
 
-type packetInfo struct {
-	keyframe    bool
-	hasRef      bool
-	numExt      int
-	frameId     int
-	packetId    uint16
-	maxPacketId uint32
-	payload     []byte
-	ssrc        uint32
-	seq         uint16
-}
-
 type Stream struct {
 	buffer         []byte
 	currentFrameId int
@@ -35,8 +23,9 @@ type Stream struct {
 	newFrameId     int
 	packetsQueue   map[uint16]*rtp.Packet
 	prevFrameId    int
+	receiverSsrc   uint32
 	sendRtcp       func([]byte, net.Addr)
-	ssrc           uint32
+	senderSsrc     uint32
 }
 
 func (stream *Stream) enqueuePacket(packet *rtp.Packet) {
@@ -154,12 +143,12 @@ func (stream *Stream) sendPSFB(net.Addr) {
 
 func (stream *Stream) sendReceiverReport(addr net.Addr, time uint64) {
 	reports := make([]rtcp.ReceptionReport, 1)
-	reports[0].SSRC = stream.ssrc
+	reports[0].SSRC = stream.senderSsrc
 	reports[0].LastSenderReport = ExtractMiddleBits(time)
 	reports[0].LastSequenceNumber = uint32(stream.highestSeq)
 
 	report := rtcp.ReceiverReport{
-		SSRC:              stream.ssrc + 1,
+		SSRC:              stream.receiverSsrc,
 		Reports:           reports,
 		ProfileExtensions: nil,
 	}
@@ -172,7 +161,7 @@ func (stream *Stream) sendReceiverReport(addr net.Addr, time uint64) {
 	stream.sendRtcp(bytes, addr)
 }
 
-func NewStream(decode func([]byte, int), log hclog.Logger, sendRtcp func([]byte, net.Addr), ssrc uint32) *Stream {
+func NewStream(decode func([]byte, int), log hclog.Logger, sendRtcp func([]byte, net.Addr), receiverSsrc uint32, senderSsrc uint32) *Stream {
 	return &Stream{
 		buffer:         make([]byte, 0),
 		currentFrameId: -1,
@@ -183,7 +172,8 @@ func NewStream(decode func([]byte, int), log hclog.Logger, sendRtcp func([]byte,
 		newFrameId:     -1,
 		packetsQueue:   make(map[uint16]*rtp.Packet),
 		prevFrameId:    0,
+		receiverSsrc:   receiverSsrc,
 		sendRtcp:       sendRtcp,
-		ssrc:           ssrc,
+		senderSsrc:     senderSsrc,
 	}
 }

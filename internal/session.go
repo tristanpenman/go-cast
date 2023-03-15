@@ -141,15 +141,17 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 
 	for _, supportedStream := range request.Offer.SupportedStreams {
 		if supportedStream.Type == "video_source" {
+			senderSsrc := supportedStream.Ssrc
+			receiverSsrc := supportedStream.Ssrc + 1
+
 			receiverRtcpEventLog = append(receiverRtcpEventLog, supportedStream.Index)
 			sendIndexes = append(sendIndexes, supportedStream.Index)
-			ssrcs = append(ssrcs, supportedStream.Ssrc+1)
+			ssrcs = append(ssrcs, +1)
 
 			key, _ := hex.DecodeString(supportedStream.AesKey)
 			iv, _ := hex.DecodeString(supportedStream.AesIvMask)
 
 			decrypter := NewDecrypter(key, iv)
-			ssrc := supportedStream.Ssrc
 
 			decode := func(buffer []byte, nextFrameId int) {
 				plaintext := make([]byte, len(buffer))
@@ -164,7 +166,7 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 			}
 
 			logger := NewLogger(fmt.Sprintf("stream (%d)", supportedStream.Ssrc))
-			session.streams[ssrc] = NewStream(decode, logger, sendRtcp, supportedStream.Ssrc)
+			session.streams[senderSsrc] = NewStream(decode, logger, sendRtcp, receiverSsrc, senderSsrc)
 		}
 	}
 
