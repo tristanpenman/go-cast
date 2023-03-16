@@ -10,7 +10,7 @@ require (
 	github.com/hashicorp/mdns v1.0.5
 	github.com/pion/rtp v1.7.13
 	github.com/xlab/libvpx-go v0.0.0-20220203233824-652b2616315c
-	google.golang.org/protobuf v1.29.1
+	google.golang.org/protobuf v1.30.0
 )
 
 require (
