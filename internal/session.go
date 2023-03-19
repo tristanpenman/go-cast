@@ -146,7 +146,7 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 
 			receiverRtcpEventLog = append(receiverRtcpEventLog, supportedStream.Index)
 			sendIndexes = append(sendIndexes, supportedStream.Index)
-			ssrcs = append(ssrcs, +1)
+			ssrcs = append(ssrcs, receiverSsrc)
 
 			key, _ := hex.DecodeString(supportedStream.AesKey)
 			iv, _ := hex.DecodeString(supportedStream.AesIvMask)

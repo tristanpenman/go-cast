@@ -14,16 +14,17 @@ import (
 )
 
 type Stream struct {
-	buffer []byte
-	//currentFrameId int
+	buffer       []byte
+	ckptFrameId  int
 	decode       func([]byte, int)
 	highestSeq   uint16
 	log          hclog.Logger
 	nextSeq      int
 	newFrameId   int
+	ntpTime      uint64
 	packetsQueue map[uint16]*rtp.Packet
-	prevFrameId  int
 	receiverSsrc uint32
+	rtpTime      uint32
 	sendRtcp     func([]byte, net.Addr)
 	senderSsrc   uint32
 }
@@ -79,15 +80,22 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet, addr net.Addr) {
 		"hasRef", hasRef,
 		"numExt", numExt,
 		"frameId", frameId,
-		"prevFrameId", stream.prevFrameId,
+		"ckptFrameId", stream.ckptFrameId,
 		"packetId", packetId,
 		"maxPacketId", maxPacketId)
 
-	if frameId != stream.prevFrameId {
+	if packet.Marker {
+		// send payload-specific feedback
+		extReportBytes := stream.prepareExtendedReport(stream.ntpTime)
+		psfbBytes := stream.preparePSFB()
+		payload := append(extReportBytes, psfbBytes...)
+		stream.sendRtcp(payload, addr)
+	}
+
+	if frameId != stream.ckptFrameId {
 		stream.decode(stream.buffer, frameId)
 		stream.buffer = make([]byte, 0)
-		stream.sendPSFB(addr)
-		stream.prevFrameId = frameId
+		stream.ckptFrameId = frameId
 	}
 
 	offset := 6
@@ -125,9 +133,20 @@ func (stream *Stream) handleRtcpPackets(packets []rtcp.Packet, addr net.Addr) {
 	for _, packet := range packets {
 		switch p := packet.(type) {
 		case *rtcp.SenderReport:
-			stream.log.Info("received sender report")
-			stream.sendExtendedReport(addr, p.NTPTime)
-			stream.sendReceiverReport(addr, p.NTPTime)
+			stream.log.Info("received sender report", "p", p)
+
+			// update sender timestamps
+			stream.ntpTime = p.NTPTime
+			stream.rtpTime = p.RTPTime
+
+			// respond with a receiver report
+			go func() {
+				extReportBytes := stream.prepareExtendedReport(stream.ntpTime)
+				recvReportBytes := stream.prepareReceiverReport(stream.rtpTime)
+				payload := append(extReportBytes, recvReportBytes...)
+				stream.sendRtcp(payload, addr)
+			}()
+
 			break
 		default:
 			stream.log.Info("skipping rtcp packet")
@@ -136,31 +155,30 @@ func (stream *Stream) handleRtcpPackets(packets []rtcp.Packet, addr net.Addr) {
 	}
 }
 
-func (stream *Stream) sendPSFB(addr net.Addr) {
+func (stream *Stream) preparePSFB() []byte {
 	feedback := CastFeedback{
 		ReceiverSSRC:        stream.receiverSsrc,
 		SenderSSRC:          stream.senderSsrc,
-		CkPtFrameId:         uint8(stream.prevFrameId),
+		CkPtFrameId:         uint8(stream.ckptFrameId),
 		LossFields:          0,
-		CurrentPlayoutDelay: 0,
+		CurrentPlayoutDelay: 400,
 	}
 
 	stream.log.Info("psfb", "psfb", feedback)
 
-	bytes, _ := feedback.Marshal()
+	payload, err := feedback.Marshal()
+	if err != nil {
+		stream.log.Warn("failed to prepare psfb: " + err.Error())
+		return nil
+	}
 
-	stream.sendRtcp(bytes, addr)
+	return payload
 }
 
-func (stream *Stream) sendExtendedReport(addr net.Addr, time uint64) {
+func (stream *Stream) prepareExtendedReport(time uint64) []byte {
 	var reports []rtcp.ReportBlock
 
 	reports = append(reports, &rtcp.ReceiverReferenceTimeReportBlock{
-		XRHeader: rtcp.XRHeader{
-			BlockType:    rtcp.ReceiverReferenceTimeReportBlockType,
-			TypeSpecific: 0,
-			BlockLength:  2,
-		},
 		NTPTimestamp: time,
 	})
 
@@ -169,18 +187,20 @@ func (stream *Stream) sendExtendedReport(addr net.Addr, time uint64) {
 		Reports:    reports,
 	}
 
-	bytes, err := report.Marshal()
+	payload, err := report.Marshal()
 	if err != nil {
-		return
+		stream.log.Warn("failed to prepare ext report: " + err.Error())
+		return nil
 	}
 
-	stream.sendRtcp(bytes, addr)
+	return payload
 }
 
-func (stream *Stream) sendReceiverReport(addr net.Addr, time uint64) {
+func (stream *Stream) prepareReceiverReport(rtpTime uint32) []byte {
 	reports := make([]rtcp.ReceptionReport, 1)
 	reports[0].SSRC = stream.senderSsrc
-	reports[0].LastSenderReport = ExtractMiddleBits(time)
+	reports[0].LastSenderReport = rtpTime
+	reports[0].Delay = 200
 	reports[0].LastSequenceNumber = uint32(stream.highestSeq)
 
 	report := rtcp.ReceiverReport{
@@ -189,26 +209,28 @@ func (stream *Stream) sendReceiverReport(addr net.Addr, time uint64) {
 		ProfileExtensions: nil,
 	}
 
-	bytes, err := report.Marshal()
+	payload, err := report.Marshal()
 	if err != nil {
-		return
+		stream.log.Warn("failed to prepare recv report: " + err.Error())
+		return nil
 	}
 
-	stream.sendRtcp(bytes, addr)
+	return payload
 }
 
 func NewStream(decode func([]byte, int), log hclog.Logger, sendRtcp func([]byte, net.Addr), receiverSsrc uint32, senderSsrc uint32) *Stream {
 	return &Stream{
-		buffer: make([]byte, 0),
-		//currentFrameId: 0,
+		buffer:       make([]byte, 0),
+		ckptFrameId:  255,
 		decode:       decode,
 		highestSeq:   0,
 		log:          log,
 		nextSeq:      -1,
 		newFrameId:   -1,
+		ntpTime:      0,
 		packetsQueue: make(map[uint16]*rtp.Packet),
-		prevFrameId:  0,
 		receiverSsrc: receiverSsrc,
+		rtpTime:      0,
 		sendRtcp:     sendRtcp,
 		senderSsrc:   senderSsrc,
 	}
