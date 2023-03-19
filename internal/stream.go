@@ -14,19 +14,20 @@ import (
 )
 
 type Stream struct {
-	buffer       []byte
-	ckptFrameId  int
-	decode       func([]byte, int)
-	highestSeq   uint16
-	log          hclog.Logger
-	nextSeq      int
-	newFrameId   int
-	ntpTime      uint64
-	packetsQueue map[uint16]*rtp.Packet
-	receiverSsrc uint32
-	rtpTime      uint32
-	sendRtcp     func([]byte, net.Addr)
-	senderSsrc   uint32
+	actualFrameId int
+	buffer        []byte
+	ckptFrameId   int
+	decode        func([]byte, int)
+	highestSeq    uint16
+	log           hclog.Logger
+	nextSeq       int
+	newFrameId    int
+	ntpTime       uint64
+	packetsQueue  map[uint16]*rtp.Packet
+	receiverSsrc  uint32
+	rtpTime       uint32
+	sendRtcp      func([]byte, net.Addr)
+	senderSsrc    uint32
 }
 
 func (stream *Stream) enqueuePacket(packet *rtp.Packet) {
@@ -84,25 +85,11 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet, addr net.Addr) {
 		"packetId", packetId,
 		"maxPacketId", maxPacketId)
 
-	if packet.Marker {
-		// send payload-specific feedback
-		extReportBytes := stream.prepareExtendedReport(stream.ntpTime)
-		psfbBytes := stream.preparePSFB()
-		payload := append(extReportBytes, psfbBytes...)
-		stream.sendRtcp(payload, addr)
-	}
-
-	if frameId != stream.ckptFrameId {
-		stream.decode(stream.buffer, frameId)
-		stream.buffer = make([]byte, 0)
-		stream.ckptFrameId = frameId
-	}
-
 	offset := 6
 	if hasRef {
 		payloadReader.Seek(int64(offset), io.SeekStart)
 		refId, _ := payloadReader.ReadByte()
-		stream.log.Info(fmt.Sprintf("ref id: %d", refId))
+		stream.log.Debug(fmt.Sprintf("ref id: %d", refId))
 		offset++
 	}
 
@@ -116,7 +103,7 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet, addr net.Addr) {
 		dataSize := typeAndSize & 0x3FF
 
 		if dataType == 1 {
-			stream.log.Info("ignored adaptive latency extension")
+			stream.log.Debug("ignored adaptive latency extension")
 		} else {
 			stream.log.Info("ignoring unknown extension type", "dataType", dataType, "dataSize", dataSize)
 		}
@@ -125,6 +112,22 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet, addr net.Addr) {
 	}
 
 	stream.buffer = append(stream.buffer, packet.Payload[offset:]...)
+
+	if packet.Marker {
+		// send payload-specific feedback
+		stream.log.Info("sending psfb")
+		extReportBytes := stream.prepareExtendedReport(stream.ntpTime)
+		psfbBytes := stream.preparePSFB()
+		payload := append(extReportBytes, psfbBytes...)
+		stream.sendRtcp(payload, addr)
+
+		// decode frame
+		stream.log.Info("decoding frame", "actualFrameId", stream.actualFrameId, "ckptFrameId", stream.ckptFrameId)
+		stream.decode(stream.buffer, stream.actualFrameId)
+		stream.actualFrameId++
+		stream.buffer = make([]byte, 0)
+		stream.ckptFrameId = frameId
+	}
 }
 
 func (stream *Stream) handleRtcpPackets(packets []rtcp.Packet, addr net.Addr) {
@@ -133,7 +136,7 @@ func (stream *Stream) handleRtcpPackets(packets []rtcp.Packet, addr net.Addr) {
 	for _, packet := range packets {
 		switch p := packet.(type) {
 		case *rtcp.SenderReport:
-			stream.log.Info("received sender report", "p", p)
+			stream.log.Info("received sender report")
 
 			// update sender timestamps
 			stream.ntpTime = p.NTPTime
@@ -141,6 +144,7 @@ func (stream *Stream) handleRtcpPackets(packets []rtcp.Packet, addr net.Addr) {
 
 			// respond with a receiver report
 			go func() {
+				stream.log.Info("sending receiver report")
 				extReportBytes := stream.prepareExtendedReport(stream.ntpTime)
 				recvReportBytes := stream.prepareReceiverReport(stream.rtpTime)
 				payload := append(extReportBytes, recvReportBytes...)
@@ -164,7 +168,7 @@ func (stream *Stream) preparePSFB() []byte {
 		CurrentPlayoutDelay: 400,
 	}
 
-	stream.log.Info("psfb", "psfb", feedback)
+	stream.log.Debug("psfb", "psfb", feedback)
 
 	payload, err := feedback.Marshal()
 	if err != nil {
@@ -220,18 +224,19 @@ func (stream *Stream) prepareReceiverReport(rtpTime uint32) []byte {
 
 func NewStream(decode func([]byte, int), log hclog.Logger, sendRtcp func([]byte, net.Addr), receiverSsrc uint32, senderSsrc uint32) *Stream {
 	return &Stream{
-		buffer:       make([]byte, 0),
-		ckptFrameId:  255,
-		decode:       decode,
-		highestSeq:   0,
-		log:          log,
-		nextSeq:      -1,
-		newFrameId:   -1,
-		ntpTime:      0,
-		packetsQueue: make(map[uint16]*rtp.Packet),
-		receiverSsrc: receiverSsrc,
-		rtpTime:      0,
-		sendRtcp:     sendRtcp,
-		senderSsrc:   senderSsrc,
+		actualFrameId: 0,
+		buffer:        make([]byte, 0),
+		ckptFrameId:   255,
+		decode:        decode,
+		highestSeq:    0,
+		log:           log,
+		nextSeq:       -1,
+		newFrameId:    -1,
+		ntpTime:       0,
+		packetsQueue:  make(map[uint16]*rtp.Packet),
+		receiverSsrc:  receiverSsrc,
+		rtpTime:       0,
+		sendRtcp:      sendRtcp,
+		senderSsrc:    senderSsrc,
 	}
 }

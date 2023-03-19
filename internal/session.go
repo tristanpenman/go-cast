@@ -153,12 +153,12 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 
 			decrypter := NewDecrypter(key, iv)
 
-			decode := func(buffer []byte, nextFrameId int) {
+			decode := func(buffer []byte, frameId int) {
 				plaintext := make([]byte, len(buffer))
-				session.log.Info(fmt.Sprintf("decrypting %d bytes", len(buffer)), "frame id", nextFrameId)
+				session.log.Info(fmt.Sprintf("decrypting %d bytes", len(buffer)), "frame id", frameId)
 				decrypter.Decrypt(buffer, plaintext)
 				session.decodeBuffer(plaintext)
-				decrypter.Reset(nextFrameId)
+				decrypter.Reset(frameId + 1)
 			}
 
 			sendRtcp := func(buffer []byte, addr net.Addr) {
