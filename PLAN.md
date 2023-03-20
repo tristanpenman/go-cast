@@ -6,9 +6,12 @@
   + ~~Properly handle CONNECT messages and transport logic~~
   + ~~VP8 decoding~~
   + ~~Display content using OpenGL~~
-  + Backdrop and status (in progress)
-  + Receive and decrypt RTP stream (in progress)
-  + H.264 Encoding
+  + ~~Backdrop and status~~
+  + ~~Receive and decrypt RTP stream~~
+  + RTCP nacks and various reliability improvements
+  * Fix issues with initial session negotiation
+  * Handle multiple clients properly
+  + H.264 Decoding
 - Sender
   + Basic structure for sender communication (in progress)
   + Allow sender to cast a local video

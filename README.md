@@ -1,6 +1,8 @@
 # GoCast
 
-This project is intended to offer a complete implementation of the [Google Cast](https://en.wikipedia.org/wiki/Google_Cast) protocol, written in Go, with custom Sender and Receiver apps using [FFmpeg](https://ffmpeg.org/) as a frontend.
+This project is intended to offer a complete implementation of the [Google Cast](https://en.wikipedia.org/wiki/Google_Cast) protocol, written in Go, with custom Sender and Receiver apps using GLFW for the frontend.
+
+GoCast currently supports streams using VP8, with H.264 support on the roadmap. Audio is currently not supported.
 
 ## Design
 
