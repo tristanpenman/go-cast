@@ -287,16 +287,31 @@ func main() {
 	}()
 
 	for !window.ShouldClose() {
-		var w, h = window.GetSize()
-
-		// -------------------------
-		// MODIFY OR LOAD IMAGE HERE
-		// -------------------------
+		w, h := window.GetSize()
 
 		gl.BindTexture(gl.TEXTURE_2D, texture)
-		gl.TexImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, int32(1920), int32(1080), 0, gl.RGBA, gl.UNSIGNED_BYTE, gl.Ptr(img.Pix))
+		gl.TexImage2D(
+			gl.TEXTURE_2D,
+			0,
+			gl.RGBA,
+			int32(img.Rect.Size().X),
+			int32(img.Rect.Size().Y),
+			0,
+			gl.RGBA,
+			gl.UNSIGNED_BYTE,
+			gl.Ptr(img.Pix))
 
-		gl.BlitFramebuffer(0, int32(1080), int32(1920), 0, 0, 0, int32(w), int32(h), gl.COLOR_BUFFER_BIT, gl.LINEAR)
+		gl.BlitFramebuffer(
+			0,
+			int32(img.Rect.Size().Y),
+			int32(img.Rect.Size().X),
+			0,
+			0,
+			0,
+			int32(w),
+			int32(h),
+			gl.COLOR_BUFFER_BIT,
+			gl.LINEAR)
 
 		window.SwapBuffers()
 		glfw.WaitEvents()
