@@ -121,3 +121,9 @@ If you have the means to generate your own manifest files (i.e. via a rooted Chr
 The Chromecast protocol relies on message types defined in protobuf format. The cast_channel.proto file in internal/message has been borrowed from the Chromium source code. To regenerate the Go bindings, run the following command:   
 
     protoc --go_opt=paths=source_relative --go_out=. ./internal/channel/cast_channel.proto
+
+## License
+
+This code is licensed under the MIT License.
+
+See the LICENSE file for more information.
