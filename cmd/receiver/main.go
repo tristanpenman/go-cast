@@ -124,6 +124,7 @@ func main() {
 	var fixNewlines = flag.Bool("fix-newlines", false, "fix newline characters in manifest file")
 	var friendlyName = flag.String("friendly-name", "GoCast Receiver", "friendly name")
 	var iface = flag.String("iface", "", "interface to listen on (optional)")
+	var jpegOutput = flag.Bool("jpeg-output", false, "write each frame to tmp/{frameNum}.jpeg")
 	var port = flag.Int("port", 8009, "port to listen on")
 
 	flag.Parse()
@@ -144,6 +145,7 @@ func main() {
 		"fix-newlines", *fixNewlines,
 		"friendly-name", *friendlyName,
 		"iface", *iface,
+		"jpeg-output", *jpegOutput,
 		"port", *port,
 	)
 
@@ -258,7 +260,7 @@ func main() {
 	go func() {
 		id := uuid.New().String()
 		udn := id
-		device := NewDevice(images, *deviceModel, *friendlyName, id, udn)
+		device := NewDevice(images, *deviceModel, *friendlyName, id, *jpegOutput, udn)
 
 		server := NewServer(device, manifest, clientPrefix, iface, *port, &wg)
 		if server == nil {

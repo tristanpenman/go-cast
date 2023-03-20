@@ -29,6 +29,7 @@ type Session struct {
 	// implementation
 	device      *Device
 	frameCount  int
+	jpegOutput  bool
 	log         hclog.Logger
 	packetConn  net.PacketConn
 	streams     map[uint32]*Stream
@@ -339,33 +340,35 @@ func (session *Session) decodeBuffer(payload []byte) {
 
 		session.device.DisplayImage(image.ImageRGBA())
 
-		jpegBuffer := new(bytes.Buffer)
-		if err = jpeg.Encode(jpegBuffer, image.ImageYCbCr(), nil); err != nil {
-			session.log.Error("failed to encode jpeg: " + err.Error())
-			return
-		}
+		if session.jpegOutput {
+			jpegBuffer := new(bytes.Buffer)
+			if err = jpeg.Encode(jpegBuffer, image.ImageYCbCr(), nil); err != nil {
+				session.log.Error("failed to encode jpeg: " + err.Error())
+				return
+			}
 
-		jpegPath := path.Join("tmp", fmt.Sprintf("%d%s", session.frameCount, ".jpg"))
-		fo, err := os.Create(jpegPath)
-		if err != nil {
-			session.log.Error("failed to create image: " + err.Error())
-			return
-		}
+			jpegPath := path.Join("tmp", fmt.Sprintf("%d%s", session.frameCount, ".jpg"))
+			fo, err := os.Create(jpegPath)
+			if err != nil {
+				session.log.Error("failed to create image: " + err.Error())
+				return
+			}
 
-		if _, err := fo.Write(jpegBuffer.Bytes()); err != nil {
-			session.log.Error("failed to write jpeg: " + err.Error())
-			return
-		}
+			if _, err := fo.Write(jpegBuffer.Bytes()); err != nil {
+				session.log.Error("failed to write jpeg: " + err.Error())
+				return
+			}
 
-		err = fo.Close()
-		if err != nil {
-			session.log.Warn("failed to close file: " + err.Error())
-			return
+			err = fo.Close()
+			if err != nil {
+				session.log.Warn("failed to close file: " + err.Error())
+				return
+			}
 		}
 	}
 }
 
-func NewSession(appId string, clientId int, device *Device, displayName string, sessionId string, transportId string) *Session {
+func NewSession(appId string, clientId int, device *Device, displayName string, jpegOutput bool, sessionId string, transportId string) *Session {
 	log := NewLogger(fmt.Sprintf("session (%d) [%s]", clientId, sessionId))
 
 	packetConn, err := net.ListenPacket("udp", ":50000")
@@ -392,6 +395,7 @@ func NewSession(appId string, clientId int, device *Device, displayName string, 
 		// internal
 		device:      device,
 		frameCount:  0,
+		jpegOutput:  jpegOutput,
 		log:         log,
 		packetConn:  packetConn,
 		stop:        stop,

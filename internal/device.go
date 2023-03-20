@@ -34,6 +34,7 @@ type Device struct {
 
 	// implementation
 	images     chan *image.RGBA
+	jpegOutput bool
 	log        hclog.Logger
 	nextPid    int
 	transports map[string]*Transport
@@ -160,7 +161,7 @@ func (device *Device) startAndroidMirroringSession(clientId int) {
 	transportId := fmt.Sprintf("pid-%d", device.nextPid)
 	device.nextPid++
 
-	session := NewSession(androidMirroringAppId, clientId, device, "Android Mirroring", uuid.New().String(), transportId)
+	session := NewSession(androidMirroringAppId, clientId, device, "Android Mirroring", device.jpegOutput, uuid.New().String(), transportId)
 	session.Start()
 
 	device.Sessions[session.SessionId] = session
@@ -171,7 +172,7 @@ func (device *Device) startChromeMirroringSession(clientId int) {
 	transportId := fmt.Sprintf("pid-%d", device.nextPid)
 	device.nextPid++
 
-	session := NewSession(chromeMirroringAppId, clientId, device, "Chrome Mirroring", uuid.New().String(), transportId)
+	session := NewSession(chromeMirroringAppId, clientId, device, "Chrome Mirroring", device.jpegOutput, uuid.New().String(), transportId)
 	session.Start()
 
 	device.Sessions[session.SessionId] = session
@@ -214,7 +215,7 @@ func (device *Device) DisplayImage(image *image.RGBA) {
 	device.images <- image
 }
 
-func NewDevice(images chan *image.RGBA, deviceModel string, friendlyName string, id string, udn string) *Device {
+func NewDevice(images chan *image.RGBA, deviceModel string, friendlyName string, id string, jpegOutput bool, udn string) *Device {
 	log := NewLogger(fmt.Sprintf("device (%s)", id))
 
 	// Allow clients to start Android or Chrome mirroring apps
@@ -232,6 +233,7 @@ func NewDevice(images chan *image.RGBA, deviceModel string, friendlyName string,
 
 		// implementation
 		images:     images,
+		jpegOutput: jpegOutput,
 		log:        log,
 		nextPid:    1,
 		transports: make(map[string]*Transport),
