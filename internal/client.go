@@ -17,7 +17,6 @@ type Client struct {
 	conn         net.Conn
 	deviceAuthWg *sync.WaitGroup
 	log          hclog.Logger
-	//Incoming     chan *channel.CastMessage
 }
 
 func (client *Client) sendDeviceAuthChallenge(deviceAuthWg *sync.WaitGroup) bool {
@@ -80,7 +79,6 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 		castChannel: castChannel,
 		conn:        conn,
 		log:         log,
-		//Incoming:    make(chan *channel.CastMessage),
 	}
 
 	if authChallenge {
