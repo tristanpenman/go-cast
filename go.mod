@@ -9,7 +9,7 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/google/uuid v1.3.0
 	github.com/grantae/certinfo v0.0.0-20170412194111-59d56a35515b
-	github.com/hashicorp/go-hclog v1.4.0
+	github.com/hashicorp/go-hclog v1.5.0
 	github.com/hashicorp/mdns v1.0.5
 	github.com/pion/rtcp v1.2.10
 	github.com/pion/rtp v1.7.13
