@@ -60,7 +60,9 @@ Before running the Receiver app, you will need to create or obtain a valid _cert
 
 An example manifest file is included in [etc/cert-manifest.json](./etc/cert-manifest.json).
 
-If you choose to provide your own manifest (e.g. using a rooted Chromecast), then the appropriately formatted file can be provided using the `--cert-manifest <file>` command line argument.
+Generating a valid certificate manifest is non-trivial, and requires access to a rooted Chromecast. Tooling for such an endeavour can be found [here](https://github.com/tristanpenman/chromecast-tools).
+
+If you choose to provide your own manifest , then the appropriately formatted file can be provided using the `--cert-manifest <file>` command line argument.
 
 Alternatively, you can use a certificate service for this. A conforming certificate service endpoint takes three query parameters:
 
