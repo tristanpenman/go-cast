@@ -116,11 +116,31 @@ If you have the means to generate your own manifest files (i.e. via a rooted Chr
 
 ## Development
 
+All development is done using Go 1.18, across Ubuntu Linux and macOS. Support for other platforms (including Windows) is unknown at this point in time. Contributions for cross-platform support are welcomed!
+
 ### Protobuf
 
-The Chromecast protocol relies on message types defined in protobuf format. The cast_channel.proto file in internal/message has been borrowed from the Chromium source code. To regenerate the Go bindings, run the following command:   
+The Chromecast protocol relies on message types defined in protobuf format. The cast_channel.proto file in internal/message has been borrowed from the Chromium source code. While this is not likely to change, you can regenerate the Go bindings with the following command:   
 
     protoc --go_opt=paths=source_relative --go_out=. ./internal/channel/cast_channel.proto
+
+### Tests
+
+As is often the case with personal projects, testing has not been treated as a priority on this project. This was initially due to the rapidly changing internal architecture, but it is now due to a lack of time.
+
+Contributions are also welcome here!
+
+## Contributing
+
+If you would like to contribute to this project, you are welcome to raise a PR with any changes you have in mind. I will make a best effort to guide any PRs towards being successfully merged.
+
+If there are changes you would like to make, but you're not sure on the approach to take, please raise an issue.
+
+## Acknowledgements
+
+Much of this work is inspired by the [Open Screen Library](https://chromium.googlesource.com/openscreen/), which aims to implement the [Open Screen Protocol](https://w3c.github.io/openscreenprotocol/), Multicast DNS and DNS-SD, and the Google Cast protocol. The Open Screen Library has been an excellent reference for implementing parts of the Google Cast protocol.
+
+The [node-castv2](https://github.com/thibauts/node-castv2) library has also been extremely helpful. Early work in implementing the Google Cast protocol was based on the code found in this package. I maintain my own [fork](https://github.com/tristanpenman/node-castv2) of this package, which I aim to bring into feature parity with GoCast.
 
 ## License
 
