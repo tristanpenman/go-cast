@@ -20,8 +20,8 @@ type Stream struct {
 	decode        func([]byte, int)
 	highestSeq    uint16
 	log           hclog.Logger
-	nextSeq       int
-	newFrameId    int
+	nextFrameId   uint8
+	nextPacketId  uint16
 	ntpTime       uint64
 	packetsQueue  map[uint16]*rtp.Packet
 	receiverSsrc  uint32
@@ -31,21 +31,40 @@ type Stream struct {
 }
 
 func (stream *Stream) enqueuePacket(packet *rtp.Packet) {
-	stream.packetsQueue[packet.SequenceNumber] = packet
-	stream.log.Debug("enqueued packet", "sequenceNumber", packet.SequenceNumber)
+	frameId := int(packet.Payload[1])
+	stream.log.Info("enqueued packet", "sequenceNumber", packet.SequenceNumber, "frameId", frameId)
 
 	if packet.SequenceNumber > stream.highestSeq {
 		stream.highestSeq = packet.SequenceNumber
 	}
+
+	stream.packetsQueue[packet.SequenceNumber] = packet
 }
 
 func (stream *Stream) nextPacket() *rtp.Packet {
 	for seq := range stream.packetsQueue {
-		if int(seq) == stream.nextSeq || stream.nextSeq == -1 {
-			packet := stream.packetsQueue[seq]
+		packet := stream.packetsQueue[seq]
+		frameId := uint8(packet.Payload[1])
+
+		payloadReader := bytes.NewReader(packet.Payload)
+		packetIdBytes := make([]byte, 2)
+		payloadReader.Seek(2, io.SeekStart)
+		binary.Read(payloadReader, binary.BigEndian, packetIdBytes)
+		packetId := binary.BigEndian.Uint16(packetIdBytes)
+
+		maxPacketIdBytes := make([]byte, 2)
+		payloadReader.Seek(4, io.SeekStart)
+		binary.Read(payloadReader, binary.BigEndian, maxPacketIdBytes)
+		maxPacketId := binary.BigEndian.Uint16(maxPacketIdBytes)
+
+		if packetId == stream.nextPacketId && frameId == stream.nextFrameId {
 			delete(stream.packetsQueue, seq)
-			stream.nextSeq = int(seq + 1)
-			stream.log.Debug("next packet", "sequenceNumber", seq)
+			if packetId == maxPacketId {
+				stream.nextPacketId = 0
+				stream.nextFrameId = stream.nextFrameId + 1
+			} else {
+				stream.nextPacketId++
+			}
 			return packet
 		}
 	}
@@ -80,10 +99,12 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet, addr net.Addr) {
 		"keyframe", keyframe,
 		"hasRef", hasRef,
 		"numExt", numExt,
+		"marker", packet.Marker,
 		"frameId", frameId,
 		"ckptFrameId", stream.ckptFrameId,
 		"packetId", packetId,
-		"maxPacketId", maxPacketId)
+		"maxPacketId", maxPacketId,
+		"seq", packet.SequenceNumber)
 
 	offset := 6
 	if hasRef {
@@ -124,9 +145,9 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet, addr net.Addr) {
 		// decode frame
 		stream.log.Info("decoding frame", "actualFrameId", stream.actualFrameId, "ckptFrameId", stream.ckptFrameId)
 		stream.decode(stream.buffer, stream.actualFrameId)
-		stream.actualFrameId++
 		stream.buffer = make([]byte, 0)
 		stream.ckptFrameId = frameId
+		stream.actualFrameId++
 	}
 }
 
@@ -204,7 +225,7 @@ func (stream *Stream) prepareReceiverReport(rtpTime uint32) []byte {
 	reports := make([]rtcp.ReceptionReport, 1)
 	reports[0].SSRC = stream.senderSsrc
 	reports[0].LastSenderReport = rtpTime
-	reports[0].Delay = 200
+	reports[0].Delay = 2000
 	reports[0].LastSequenceNumber = uint32(stream.highestSeq)
 
 	report := rtcp.ReceiverReport{
@@ -230,8 +251,8 @@ func NewStream(decode func([]byte, int), log hclog.Logger, sendRtcp func([]byte,
 		decode:        decode,
 		highestSeq:    0,
 		log:           log,
-		nextSeq:       -1,
-		newFrameId:    -1,
+		nextFrameId:   0,
+		nextPacketId:  0,
 		ntpTime:       0,
 		packetsQueue:  make(map[uint16]*rtp.Packet),
 		receiverSsrc:  receiverSsrc,
