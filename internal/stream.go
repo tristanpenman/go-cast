@@ -71,10 +71,10 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet, addr net.Addr) {
 	binary.Read(payloadReader, binary.BigEndian, packetIdBytes)
 	packetId := binary.BigEndian.Uint16(packetIdBytes)
 
-	maxPacketIdBytes := make([]byte, 4)
+	maxPacketIdBytes := make([]byte, 2)
 	payloadReader.Seek(4, io.SeekStart)
 	binary.Read(payloadReader, binary.BigEndian, maxPacketIdBytes)
-	maxPacketId := binary.BigEndian.Uint32(maxPacketIdBytes)
+	maxPacketId := binary.BigEndian.Uint16(maxPacketIdBytes)
 
 	stream.log.Info("frame",
 		"keyframe", keyframe,
