@@ -32,13 +32,20 @@ type Stream struct {
 
 func (stream *Stream) enqueuePacket(packet *rtp.Packet) {
 	frameId := int(packet.Payload[1])
-	stream.log.Info("enqueued packet", "sequenceNumber", packet.SequenceNumber, "frameId", frameId)
+
+	// skip repeated packets
+	// TODO: wrap around broken
+	if uint8(frameId) < stream.nextFrameId && stream.nextFrameId > 0 {
+		stream.log.Info("skipping packet", "frameId", frameId, "nextFrameId", stream.nextFrameId)
+		return
+	}
 
 	if packet.SequenceNumber > stream.highestSeq {
 		stream.highestSeq = packet.SequenceNumber
 	}
 
 	stream.packetsQueue[packet.SequenceNumber] = packet
+	stream.log.Info("enqueued packet", "sequenceNumber", packet.SequenceNumber, "frameId", frameId)
 }
 
 func (stream *Stream) nextPacket() *rtp.Packet {
