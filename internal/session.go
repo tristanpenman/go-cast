@@ -157,7 +157,8 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 			decode := func(buffer []byte, frameId int) {
 				plaintext := make([]byte, len(buffer))
 				session.log.Info(fmt.Sprintf("decrypting %d bytes", len(buffer)), "frame id", frameId)
-				decrypter.Decrypt(buffer, plaintext)
+				n := decrypter.Decrypt(buffer, plaintext)
+				session.log.Info(fmt.Sprintf("decrypted %d bytes", n))
 				session.decodeBuffer(plaintext)
 				decrypter.Reset(frameId + 1)
 			}
@@ -332,7 +333,7 @@ func (session *Session) decodeBuffer(payload []byte) {
 
 	var iter vpx.CodecIter
 	image := vpx.CodecGetFrame(session.vpxCtx, &iter)
-	if image != nil {
+	for image != nil {
 		image.Deref()
 		session.frameCount++
 
@@ -365,6 +366,8 @@ func (session *Session) decodeBuffer(payload []byte) {
 				return
 			}
 		}
+
+		image = vpx.CodecGetFrame(session.vpxCtx, &iter)
 	}
 }
 

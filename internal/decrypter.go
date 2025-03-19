@@ -13,8 +13,9 @@ type Decrypter struct {
 	stream    cipher.Stream
 }
 
-func (decrypter *Decrypter) Decrypt(payload []byte, output []byte) {
+func (decrypter *Decrypter) Decrypt(payload []byte, output []byte) int {
 	decrypter.stream.XORKeyStream(output, payload)
+	return len(output)
 }
 
 func (decrypter *Decrypter) Reset(frameNumber int) {
