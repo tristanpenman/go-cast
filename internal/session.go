@@ -286,8 +286,13 @@ func (session *Session) Start() {
 					continue
 				}
 
-				// TODO
-				stream := session.streams[rtcpPackets[0].DestinationSSRC()[0]]
+				dest := rtcpPackets[0].DestinationSSRC()
+				if len(dest) == 0 {
+					session.log.Warn("rtcp packet missing destination ssrc")
+					continue
+				}
+
+				stream := session.streams[dest[0]]
 				if stream == nil {
 					session.log.Warn("stream not found", "ssrc", packet.SSRC, "seq", packet.SequenceNumber, "type", packet.PayloadType)
 					continue
