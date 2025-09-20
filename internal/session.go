@@ -307,6 +307,8 @@ func (session *Session) Start() {
 					continue
 				}
 
+				// clone packets before enqueueing, to ensure they are not altered
+				packet = packet.Clone()
 				stream.enqueuePacket(packet)
 				nextPacket := stream.nextPacket()
 				for nextPacket != nil {
