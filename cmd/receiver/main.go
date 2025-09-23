@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	font2 "golang.org/x/image/font"
 	"image"
 	"image/draw"
 	"io/ioutil"
@@ -14,6 +13,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	// aliased
+	font2 "golang.org/x/image/font"
 
 	// third-party
 	"github.com/go-gl/gl/v3.2-core/gl"
@@ -107,57 +109,56 @@ func loadImage(filePath string) (image.Image, error) {
 	return decoded, err
 }
 
-func main() {
-	// local manifest location
-	var certManifest = flag.String("cert-manifest", "", "path to a cert manifest file")
-	var certManifestDir = flag.String("cert-manifest-dir", "", "path to a directory containing cert manifests")
+func runHeadless(images <-chan *image.RGBA) {
+	log.Info("running in headless mode")
 
-	// cloud manifest location
-	var certService = flag.String("cert-service", "", "base URL for certificate service")
-	var certServiceSalt = flag.String("cert-service-salt", "", "salt for generating cert service hash")
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 
-	// general options
-	var assetsDir = flag.String("assets-dir", "assets", "path to assets directory (fonts and backdrop)")
-	var clientPrefix = flag.String("client-prefix", "", "optional client prefix, to limit connections")
-	var deviceModel = flag.String("device-model", "go-cast", "device model")
-	var enableMdns = flag.Bool("enable-mdns", false, "advertise service using mDNS")
-	var fixNewlines = flag.Bool("fix-newlines", false, "fix newline characters in manifest file")
-	var friendlyName = flag.String("friendly-name", "GoCast Receiver", "friendly name")
-	var iface = flag.String("iface", "", "interface to listen on (optional)")
-	var jpegOutput = flag.Bool("jpeg-output", false, "write each frame to tmp/{frameNum}.jpeg")
-	var port = flag.Int("port", 8009, "port to listen on")
+	var totalFrames uint64
+	var framesSinceLast uint64
+	var bytesSinceLast uint64
+	lastLogTime := time.Now()
 
-	flag.Parse()
+	for {
+		select {
+		case img, ok := <-images:
+			if !ok {
+				log.Info("image channel closed", "frames", totalFrames)
+				return
+			}
 
-	if *certManifest == "" && *certManifestDir == "" && *certService == "" {
-		flag.PrintDefaults()
-		return
+			totalFrames++
+			framesSinceLast++
+			bytesSinceLast += uint64(len(img.Pix))
+		case now := <-ticker.C:
+			if framesSinceLast == 0 {
+				lastLogTime = now
+				continue
+			}
+
+			elapsed := now.Sub(lastLogTime).Seconds()
+			if elapsed <= 0 {
+				continue
+			}
+
+			fps := float64(framesSinceLast) / elapsed
+			bandwidthMbps := (float64(bytesSinceLast) * 8) / elapsed / 1000000
+
+			log.Info("video stats",
+				"frames", totalFrames,
+				"fps", fps,
+				"bandwidthMbps", bandwidthMbps,
+			)
+
+			framesSinceLast = 0
+			bytesSinceLast = 0
+			lastLogTime = now
+		}
 	}
+}
 
-	log.Info("args",
-		"cert-manifest", *certManifest,
-		"cert-manifest-dir", *certManifestDir,
-		"cert-service", *certService,
-		"cert-service-salt", *certServiceSalt,
-		"client-prefix", *clientPrefix,
-		"device-model", *deviceModel,
-		"enable-mdns", *enableMdns,
-		"fix-newlines", *fixNewlines,
-		"friendly-name", *friendlyName,
-		"iface", *iface,
-		"jpeg-output", *jpegOutput,
-		"port", *port,
-	)
-
-	manifest := resolveManifest(*certManifest, *certManifestDir, *certService, *certServiceSalt, *fixNewlines)
-	if manifest == nil {
-		log.Error("failed to load manifest from any sources")
-		return
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-
+func runWindowed(images <-chan *image.RGBA, assetsDir string) {
 	err := glfw.Init()
 	if err != nil {
 		panic(err)
@@ -182,12 +183,12 @@ func main() {
 		panic(err)
 	}
 
-	font, err := loadFont(path.Join(*assetsDir, "lato.ttf"))
+	font, err := loadFont(path.Join(assetsDir, "lato.ttf"))
 	if err != nil {
 		panic(err)
 	}
 
-	backdrop, err := loadImage(path.Join(*assetsDir, "backdrop.jpg"))
+	backdrop, err := loadImage(path.Join(assetsDir, "backdrop.jpg"))
 	if err != nil {
 		panic(err)
 	}
@@ -244,48 +245,12 @@ func main() {
 		gl.BindFramebuffer(gl.DRAW_FRAMEBUFFER, 0)
 	}
 
-	images := make(chan *image.RGBA)
-
 	go func() {
-		for {
-			select {
-			case i := <-images:
-				img = i
-				log.Info("received image")
-				glfw.PostEmptyEvent()
-			}
+		for i := range images {
+			img = i
+			log.Info("received image")
+			glfw.PostEmptyEvent()
 		}
-	}()
-
-	go func() {
-		id := uuid.New().String()
-		udn := id
-		device := NewDevice(images, *deviceModel, *friendlyName, id, *jpegOutput, udn)
-
-		server := NewServer(device, manifest, clientPrefix, iface, *port, &wg)
-		if server == nil {
-			return
-		}
-
-		var advertisement *Advertisement
-		if *enableMdns {
-			advertisement = NewAdvertisement(device, *port)
-			if advertisement == nil {
-				log.Error("failed to advertise receiver")
-			}
-		}
-
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-		go func() {
-			<-c
-			log.Info("interrupted")
-			if advertisement != nil {
-				advertisement.Stop()
-			}
-			server.StopListening()
-			os.Exit(0)
-		}()
 	}()
 
 	for !window.ShouldClose() {
@@ -318,4 +283,98 @@ func main() {
 		window.SwapBuffers()
 		glfw.WaitEvents()
 	}
+}
+
+func main() {
+	// local manifest location
+	var certManifest = flag.String("cert-manifest", "", "path to a cert manifest file")
+	var certManifestDir = flag.String("cert-manifest-dir", "", "path to a directory containing cert manifests")
+
+	// cloud manifest location
+	var certService = flag.String("cert-service", "", "base URL for certificate service")
+	var certServiceSalt = flag.String("cert-service-salt", "", "salt for generating cert service hash")
+
+	// general options
+	var assetsDir = flag.String("assets-dir", "assets", "path to assets directory (fonts and backdrop)")
+	var clientPrefix = flag.String("client-prefix", "", "optional client prefix, to limit connections")
+	var deviceModel = flag.String("device-model", "go-cast", "device model")
+	var enableMdns = flag.Bool("enable-mdns", false, "advertise service using mDNS")
+	var fixNewlines = flag.Bool("fix-newlines", false, "fix newline characters in manifest file")
+	var friendlyName = flag.String("friendly-name", "GoCast Receiver", "friendly name")
+	var headless = flag.Bool("headless", false, "run without UI and log stats")
+	var iface = flag.String("iface", "", "interface to listen on (optional)")
+	var jpegOutput = flag.Bool("jpeg-output", false, "write each frame to tmp/{frameNum}.jpeg")
+	var port = flag.Int("port", 8009, "port to listen on")
+
+	flag.Parse()
+
+	if *certManifest == "" && *certManifestDir == "" && *certService == "" {
+		flag.PrintDefaults()
+		return
+	}
+
+	log.Info("args",
+		"cert-manifest", *certManifest,
+		"cert-manifest-dir", *certManifestDir,
+		"cert-service", *certService,
+		"cert-service-salt", *certServiceSalt,
+		"client-prefix", *clientPrefix,
+		"device-model", *deviceModel,
+		"enable-mdns", *enableMdns,
+		"fix-newlines", *fixNewlines,
+		"friendly-name", *friendlyName,
+		"headless", *headless,
+		"iface", *iface,
+		"jpeg-output", *jpegOutput,
+		"port", *port,
+	)
+
+	manifest := resolveManifest(*certManifest, *certManifestDir, *certService, *certServiceSalt, *fixNewlines)
+	if manifest == nil {
+		log.Error("failed to load manifest from any sources")
+		return
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	images := make(chan *image.RGBA)
+
+	go func() {
+		id := uuid.New().String()
+		udn := id
+		device := NewDevice(images, *deviceModel, *friendlyName, id, *jpegOutput, udn)
+
+		server := NewServer(device, manifest, clientPrefix, iface, *port, &wg)
+		if server == nil {
+			return
+		}
+
+		var advertisement *Advertisement
+		if *enableMdns {
+			advertisement = NewAdvertisement(device, *port)
+			if advertisement == nil {
+				log.Error("failed to advertise receiver")
+			}
+		}
+
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+		go func() {
+			<-c
+			log.Info("interrupted")
+			if advertisement != nil {
+				advertisement.Stop()
+			}
+			server.StopListening()
+			os.Exit(0)
+		}()
+	}()
+
+	if *headless {
+		runHeadless(images)
+		return
+	}
+
+	runWindowed(images, *assetsDir)
 }
