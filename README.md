@@ -22,7 +22,7 @@ The key difference here is that the sender app does not need to maintain multipl
 
 ### Receiver App
 
-The `receiver` app will start a Google Cast receiver, which can then be cast to from compatible senders.  
+The `receiver` app will start a Google Cast receiver, which can then be cast to from compatible senders.
 
 To run the receiver in your local dev environment:
 
@@ -116,13 +116,24 @@ If you have the means to generate your own manifest files (i.e. via a rooted Chr
 
     go run cmd/cert-service/*.go --cert-manifest-dir=<path> --cert-service-salt=<salt>
 
+### Cloudflare Worker
+
+Alternatively, the cert service can be deployed on [Cloudflare Workers](https://developers.cloudflare.com/workers/) using the implementation in the [worker](./worker) directory. The worker expects two bindings:
+
+* `CERT_SERVICE_SALT` - the same salt used when generating query checksums
+* `CERT_MANIFESTS` - a KV namespace containing timestamped manifests stored using keys such as `certs-20240131.json`
+
+With those bindings in place, point your receiver at the worker URL and it will serve the same compressed manifest responses as the Go implementation.
+
+See the [README](./worker/README.md) for more details.
+
 ## Development
 
 All development is done using Go 1.18, across Ubuntu Linux and macOS. Support for other platforms (including Windows) is unknown at this point in time. Contributions for cross-platform support are welcomed!
 
 ### Protobuf
 
-The Chromecast protocol relies on message types defined in protobuf format. The cast_channel.proto file in internal/message has been borrowed from the Chromium source code. While this is not likely to change, you can regenerate the Go bindings with the following command:   
+The Chromecast protocol relies on message types defined in protobuf format. The cast_channel.proto file in internal/message has been borrowed from the Chromium source code. While this is not likely to change, you can regenerate the Go bindings with the following command:
 
     protoc --go_opt=paths=source_relative --go_out=. ./internal/channel/cast_channel.proto
 

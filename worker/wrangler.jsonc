@@ -1,0 +1,23 @@
+/**
+* For more details on how to configure Wrangler, refer to:
+* https://developers.cloudflare.com/workers/wrangler/configuration/
+*/
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cert-service",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-27",
+  "observability": {
+    "enabled": true
+  },
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "CERT_MANIFESTS",
+      "id": "<YOUR ID HERE>",
+      "remote": true
+    }
+  ]
+}
