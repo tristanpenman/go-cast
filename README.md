@@ -126,11 +126,25 @@ The Chromecast protocol relies on message types defined in protobuf format. The 
 
     protoc --go_opt=paths=source_relative --go_out=. ./internal/channel/cast_channel.proto
 
-### Tests
+## Tests
 
-As is often the case with personal projects, testing has not been treated as a priority on this project. This was initially due to the rapidly changing internal architecture, but it is now due to a lack of time.
+Tests have been written in the style of unit tests.
 
-Contributions are also welcome here!
+To run the tests:
+
+    go test github.com/tristanpenman/go-cast/test -v
+
+### Coverage
+
+To generate coverage reports:
+
+    go test github.com/tristanpenman/go-cast/test \
+        -coverpkg=github.com/tristanpenman/go-cast/internal \
+        -coverprofile=coverage.out
+
+This can then be converted to HTML:
+
+    go tool cover -html coverage.out -o coverage.html
 
 ## Contributing
 
