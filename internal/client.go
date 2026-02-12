@@ -16,6 +16,7 @@ type Client struct {
 	castChannel  CastChannel
 	conn         net.Conn
 	deviceAuthWg *sync.WaitGroup
+	Incoming     chan *channel.CastMessage
 	log          hclog.Logger
 }
 
@@ -78,6 +79,7 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 	client := Client{
 		castChannel: castChannel,
 		conn:        conn,
+		Incoming:    make(chan *channel.CastMessage, 64),
 		log:         log,
 	}
 
@@ -115,4 +117,8 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 
 func (client *Client) SendMessage(castMessage *channel.CastMessage) {
 	client.castChannel.Send(castMessage)
+}
+
+func (client *Client) Close() error {
+	return client.conn.Close()
 }
