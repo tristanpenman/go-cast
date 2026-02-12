@@ -36,7 +36,11 @@ Or to build an executable in `./bin/receiver`:
 
 To run the sender in your local dev environment:
 
-    go run cmd/sender/*.go
+    go run cmd/sender/*.go --hostname=<receiver-host> --app-id=<app-id>
+
+To launch the Chromecast mirroring receiver app for a local video file:
+
+    go run cmd/sender/*.go --hostname=<receiver-host> --video-path=<path-to-video>
 
 Or to build an executable in `./bin/sender`:
 
