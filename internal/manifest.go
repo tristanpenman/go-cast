@@ -15,9 +15,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"github.com/grantae/certinfo"
-	"github.com/hashicorp/go-hclog"
-	"github.com/tristanpenman/go-cast/internal/channel"
 	"io"
 	"io/ioutil"
 	"math"
@@ -27,6 +24,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/grantae/certinfo"
+	"github.com/hashicorp/go-hclog"
+	"github.com/tristanpenman/go-cast/internal/channel"
 )
 
 func beginningOfDay(t time.Time) time.Time {
@@ -256,7 +257,7 @@ func VerifySignature(manifest map[string]string, useSha256 bool) {
 	}
 
 	if err != nil {
-		fmt.Println("Not valid")
+		fmt.Printf("Not valid: %v\n", err)
 		return
 	}
 
