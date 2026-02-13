@@ -5,7 +5,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
+	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,7 +22,9 @@ const (
 	receiverNamespace   = "urn:x-cast:com.google.cast.receiver"
 	connectionNamespace = "urn:x-cast:com.google.cast.tp.connection"
 	heartbeatNamespace  = "urn:x-cast:com.google.cast.tp.heartbeat"
+	youtubeNamespace    = "urn:x-cast:com.google.youtube.mdx"
 	mirroringAppID      = "0F5096E8"
+	youtubeAppID        = "233637DE"
 )
 
 var log = internal.NewLogger("main")
@@ -51,6 +56,17 @@ type receiverStatus struct {
 type sender struct {
 	client    *internal.Client
 	requestID int
+}
+
+type youtubePayload struct {
+	Type string      `json:"type"`
+	Data youtubeData `json:"data"`
+}
+
+type youtubeData struct {
+	VideoID     string  `json:"videoId"`
+	CurrentTime float64 `json:"currentTime"`
+	DoSeek      bool    `json:"doSeek"`
 }
 
 func (s *sender) nextRequestID() int {
@@ -90,6 +106,58 @@ func (s *sender) launchApp(appID string) {
 	}
 	payloadBytes, _ := json.Marshal(request)
 	s.client.SendMessage(newUTF8CastMessage(receiverNamespace, senderID, receiverID, string(payloadBytes)))
+}
+
+func (s *sender) launchYouTubeVideo(transportID, videoID string) {
+	payload := youtubePayload{
+		Type: "flingVideo",
+		Data: youtubeData{
+			VideoID:     videoID,
+			CurrentTime: 0,
+			DoSeek:      true,
+		},
+	}
+	payloadBytes, _ := json.Marshal(payload)
+	s.client.SendMessage(newUTF8CastMessage(youtubeNamespace, senderID, transportID, string(payloadBytes)))
+}
+
+func parseYouTubeVideoID(rawURL string) (string, error) {
+	if rawURL == "" {
+		return "", errors.New("url is empty")
+	}
+
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse url: %w", err)
+	}
+
+	host := strings.ToLower(parsedURL.Host)
+	host = strings.TrimPrefix(host, "www.")
+
+	switch host {
+	case "youtu.be":
+		videoID := strings.Trim(parsedURL.Path, "/")
+		if videoID != "" {
+			return videoID, nil
+		}
+	case "youtube.com", "m.youtube.com", "music.youtube.com":
+		if id := parsedURL.Query().Get("v"); id != "" {
+			return id, nil
+		}
+
+		cleanPath := path.Clean(parsedURL.Path)
+		parts := strings.Split(strings.Trim(cleanPath, "/"), "/")
+		if len(parts) == 2 {
+			switch parts[0] {
+			case "embed", "shorts", "live":
+				if parts[1] != "" {
+					return parts[1], nil
+				}
+			}
+		}
+	}
+
+	return "", fmt.Errorf("unsupported YouTube URL: %s", rawURL)
 }
 
 func (s *sender) waitForSession(appID string, timeout time.Duration) (string, error) {
@@ -142,6 +210,7 @@ func main() {
 	var port = flag.Uint("port", 8009, "receiver port")
 	var appID = flag.String("app-id", "", "Chromecast app ID to launch")
 	var videoPath = flag.String("video-path", "", "path to local video file; launches Chromecast mirroring app")
+	var youtubeURL = flag.String("youtube-url", "", "YouTube video URL to play via the Chromecast YouTube app")
 
 	flag.Parse()
 
@@ -151,6 +220,7 @@ func main() {
 	}
 
 	effectiveAppID := *appID
+	youtubeVideoID := ""
 	if *videoPath != "" {
 		if _, err := os.Stat(*videoPath); err != nil {
 			log.Error("video path is invalid", "path", *videoPath, "err", err)
@@ -159,8 +229,24 @@ func main() {
 		effectiveAppID = mirroringAppID
 	}
 
+	if *youtubeURL != "" {
+		if *appID != "" || *videoPath != "" {
+			log.Error("--youtube-url cannot be combined with --app-id or --video-path")
+			return
+		}
+
+		videoID, err := parseYouTubeVideoID(*youtubeURL)
+		if err != nil {
+			log.Error("youtube URL is invalid", "youtube-url", *youtubeURL, "err", err)
+			return
+		}
+
+		youtubeVideoID = videoID
+		effectiveAppID = youtubeAppID
+	}
+
 	if effectiveAppID == "" {
-		log.Error("either --app-id or --video-path must be provided")
+		log.Error("one of --app-id, --video-path, or --youtube-url must be provided")
 		return
 	}
 
@@ -169,7 +255,8 @@ func main() {
 		"hostname", *hostname,
 		"port", *port,
 		"app-id", effectiveAppID,
-		"video-path", *videoPath)
+		"video-path", *videoPath,
+		"youtube-url", *youtubeURL)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -197,6 +284,12 @@ func main() {
 
 	if *videoPath != "" {
 		log.Warn("video-path support currently launches the Chromecast mirroring app only; stream upload is not implemented yet", "video-path", *videoPath)
+	}
+
+	if youtubeVideoID != "" {
+		s.launchYouTubeVideo(transportID, youtubeVideoID)
+		log.Info("youtube video queued", "video-id", youtubeVideoID)
+		time.Sleep(500 * time.Millisecond)
 	}
 
 	_ = client.Close()

@@ -42,6 +42,10 @@ To launch the Chromecast mirroring receiver app for a local video file:
 
     go run cmd/sender/*.go --hostname=<receiver-host> --video-path=<path-to-video>
 
+To launch the Chromecast YouTube app and play a video URL:
+
+    go run cmd/sender/*.go --hostname=<receiver-host> --youtube-url=<youtube-video-url>
+
 Or to build an executable in `./bin/sender`:
 
     go build -o ./bin/sender ./cmd/sender
