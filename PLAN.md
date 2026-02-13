@@ -13,10 +13,13 @@
   * Handle multiple clients properly
   + H.264 Decoding
 - Sender
-  + Basic structure for sender communication (in progress)
-  + Allow sender to cast a local video
+  + Basic structure for sender (**in progress**)
+  + Allow sender to cast a local video (**in progress**)
   + Allow sender to cast a YouTube video
-  + ...
+  + Test with a real receiver
 - Misc
   + More protocol documentation
-  + ...
+  + Allow Cloudflare worker to be hosted locally
+  + Set up linters
+  + Set up GitHub actions
+  + Windows and macOS builds
