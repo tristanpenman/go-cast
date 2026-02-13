@@ -15,7 +15,7 @@
 - Sender
   + ~~Basic structure for sender~~
   + Allow sender to cast a local video (**in progress**)
-  + Allow sender to cast a YouTube video
+  + Allow sender to cast a YouTube video (**in progress**)
   + Test with a real receiver
   + Web interface for controlling sender
 - Misc
