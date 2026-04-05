@@ -18,6 +18,10 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: stable
+      - name: Install libvpx system dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libvpx-dev pkg-config
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9.2.0
         with:
