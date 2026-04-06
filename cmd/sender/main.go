@@ -4,10 +4,10 @@ import (
 	"flag"
 	"sync"
 
-	. "github.com/tristanpenman/go-cast/internal"
+	"github.com/tristanpenman/go-cast/internal"
 )
 
-var log = NewLogger("main")
+var log = internal.NewLogger("main")
 
 func main() {
 	var disableChallenge = flag.Bool("disable-challenge", false, "disable auth challenge")
@@ -31,7 +31,7 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	client := NewClient(*hostname, *port, !*disableChallenge, &wg)
+	client := internal.NewClient(*hostname, *port, !*disableChallenge, &wg)
 	if client == nil {
 		return
 	}

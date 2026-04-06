@@ -26,16 +26,16 @@ import (
 	_ "golang.org/x/image/font"
 
 	// internal
-	. "github.com/tristanpenman/go-cast/internal"
+	"github.com/tristanpenman/go-cast/internal"
 )
 
-var log = NewLogger("main")
+var log = internal.NewLogger("main")
 
 func resolveManifest(certManifest string, certManifestDir string, certService string, certServiceSalt string, fixNewlines bool) map[string]string {
 	if certManifest != "" {
 		log.Info("attempting to read manifest from file: " + certManifest)
 
-		manifest, err := ReadManifest(log, certManifest, fixNewlines)
+		manifest, err := internal.ReadManifest(log, certManifest, fixNewlines)
 		if err == nil {
 			return manifest
 		}
@@ -46,7 +46,7 @@ func resolveManifest(certManifest string, certManifestDir string, certService st
 	if certManifestDir != "" {
 		log.Info("attempting to find manifest in directory: " + certManifestDir)
 
-		manifestPath, err := MakeCertManifestPath(certManifestDir, strconv.FormatInt(time.Now().Unix(), 10))
+		manifestPath, err := internal.MakeCertManifestPath(certManifestDir, strconv.FormatInt(time.Now().Unix(), 10))
 		if err != nil {
 			log.Error("failed to make cert manifest path: " + err.Error())
 		}
@@ -54,7 +54,7 @@ func resolveManifest(certManifest string, certManifestDir string, certService st
 		if manifestPath != nil {
 			log.Info("attempting to read manifest from file: " + *manifestPath)
 
-			manifest, err := ReadManifest(log, *manifestPath, fixNewlines)
+			manifest, err := internal.ReadManifest(log, *manifestPath, fixNewlines)
 			if err == nil {
 				return manifest
 			}
@@ -66,7 +66,7 @@ func resolveManifest(certManifest string, certManifestDir string, certService st
 	if certService != "" {
 		log.Info("attempting to download manifest from cert service: " + certService)
 
-		manifest, err := DownloadManifest(log, certService, certServiceSalt)
+		manifest, err := internal.DownloadManifest(log, certService, certServiceSalt)
 		if err == nil {
 			return manifest
 		}
@@ -343,16 +343,16 @@ func main() {
 	go func() {
 		id := uuid.New().String()
 		udn := id
-		device := NewDevice(images, *deviceModel, *friendlyName, id, *jpegOutput, udn)
+		device := internal.NewDevice(images, *deviceModel, *friendlyName, id, *jpegOutput, udn)
 
-		server := NewServer(device, manifest, clientPrefix, iface, *port, &wg)
+		server := internal.NewServer(device, manifest, clientPrefix, iface, *port, &wg)
 		if server == nil {
 			return
 		}
 
-		var advertisement *Advertisement
+		var advertisement *internal.Advertisement
 		if *enableMdns {
-			advertisement = NewAdvertisement(device, *port)
+			advertisement = internal.NewAdvertisement(device, *port)
 			if advertisement == nil {
 				log.Error("failed to advertise receiver")
 			}
