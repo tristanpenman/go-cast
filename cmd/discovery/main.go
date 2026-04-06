@@ -5,10 +5,10 @@ import (
 
 	"github.com/hashicorp/mdns"
 
-	. "github.com/tristanpenman/go-cast/internal"
+	"github.com/tristanpenman/go-cast/internal"
 )
 
-var log = NewLogger("main")
+var log = internal.NewLogger("main")
 
 func query() {
 	log.Info("query...")

@@ -205,7 +205,7 @@ func runWindowed(images <-chan *image.RGBA, assetsDir string) {
 	c.SetHinting(font2.HintingFull)
 
 	// draw backdrop
-	draw.Draw(img, img.Bounds(), backdrop, image.ZP, draw.Src)
+	draw.Draw(img, img.Bounds(), backdrop, image.Point{}, draw.Src)
 
 	// draw status
 	pt := freetype.Pt(20, 70)

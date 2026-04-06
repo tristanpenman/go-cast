@@ -10,7 +10,6 @@ import (
 
 type Advertisement struct {
 	cancel    context.CancelFunc
-	device    Device
 	log       hclog.Logger
 	responder dnssd.Responder
 }

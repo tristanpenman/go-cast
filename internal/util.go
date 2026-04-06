@@ -3,11 +3,11 @@ package internal
 import "net"
 
 func GetPort(addr net.Addr) int {
-	switch addr.(type) {
+	switch a := addr.(type) {
 	case *net.UDPAddr:
-		return addr.(*net.UDPAddr).Port
+		return a.Port
 	case *net.TCPAddr:
-		return addr.(*net.TCPAddr).Port
+		return a.Port
 	}
 
 	return -1

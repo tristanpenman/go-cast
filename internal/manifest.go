@@ -14,7 +14,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"github.com/grantae/certinfo"
 	"github.com/hashicorp/go-hclog"
@@ -81,21 +80,21 @@ func DownloadManifest(log hclog.Logger, certService string, certServiceSalt stri
 
 	resp, err := http.Get(url)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("failed to download %s: %d", url, err))
+		return nil, fmt.Errorf("failed to download %s: %w", url, err)
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
-		return nil, errors.New(fmt.Sprintf("bad server response: %s", resp.Status))
+		return nil, fmt.Errorf("bad server response: %s", resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("failed to read response body: %d", err))
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	data, err := gUnzipData(body)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("failed to unzip: %s", err))
+		return nil, fmt.Errorf("failed to unzip: %w", err)
 	}
 
 	var s = string(data)
@@ -105,7 +104,7 @@ func DownloadManifest(log hclog.Logger, certService string, certServiceSalt stri
 	var manifest map[string]string
 	err = json.Unmarshal([]byte(s), &manifest)
 	if err != nil {
-		return nil, errors.New("failed to parse certificate manifest file " + err.Error())
+		return nil, fmt.Errorf("failed to parse certificate manifest file: %w", err)
 	}
 
 	return manifest, nil

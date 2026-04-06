@@ -85,23 +85,6 @@ func (device *Device) registerTransport(castTransport CastTransport) {
 // Functions to send messages
 //
 
-func (device *Device) broadcastBinary(namespace string, payloadBinary []byte, sourceId string) {
-	transport := device.transports[sourceId]
-	if transport == nil {
-		device.log.Error("source transport is not registered", "sourceId", sourceId)
-		return
-	}
-
-	var clientConnections = map[*ClientConnection]bool{}
-	for _, subscription := range transport.subscriptions {
-		clientConnections[subscription.clientConnection] = true
-	}
-
-	for clientConnection, _ := range clientConnections {
-		clientConnection.sendBinary(namespace, payloadBinary, sourceId, "*")
-	}
-}
-
 func (device *Device) broadcastUtf8(namespace string, payloadUtf8 *string, sourceId string) {
 	transport := device.transports[sourceId]
 	if transport == nil {
@@ -114,27 +97,8 @@ func (device *Device) broadcastUtf8(namespace string, payloadUtf8 *string, sourc
 		clientConnections[subscription.clientConnection] = true
 	}
 
-	for clientConnection, _ := range clientConnections {
+	for clientConnection := range clientConnections {
 		clientConnection.sendUtf8(namespace, payloadUtf8, sourceId, "*")
-	}
-}
-
-func (device *Device) sendBinary(namespace string, payloadBinary []byte, sourceId string, destinationId string) {
-	transport := device.transports[sourceId]
-	if transport == nil {
-		device.log.Error("attempt to send from unregistered transport", "sourceId", sourceId)
-		return
-	}
-
-	var clientConnections = map[*ClientConnection]bool{}
-	for _, subscription := range transport.subscriptions {
-		if subscription.remoteId == destinationId {
-			clientConnections[subscription.clientConnection] = true
-		}
-	}
-
-	for clientConnection, _ := range clientConnections {
-		clientConnection.sendBinary(namespace, payloadBinary, sourceId, destinationId)
 	}
 }
 
@@ -152,7 +116,7 @@ func (device *Device) sendUtf8(namespace string, payloadUtf8 *string, sourceId s
 		}
 	}
 
-	for clientConnection, _ := range clientConnections {
+	for clientConnection := range clientConnections {
 		clientConnection.sendUtf8(namespace, payloadUtf8, sourceId, destinationId)
 	}
 }
@@ -189,10 +153,8 @@ func (device *Device) startApplication(appId string, clientId int) error {
 	switch appId {
 	case androidMirroringAppId:
 		device.startAndroidMirroringSession(clientId)
-		break
 	case chromeMirroringAppId:
 		device.startChromeMirroringSession(clientId)
-		break
 	default:
 		return errors.New("unsupported app")
 	}

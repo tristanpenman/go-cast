@@ -115,19 +115,6 @@ type webrtcAnswerMessage struct {
 	Result string `json:"result"`
 }
 
-func (session *Session) handleGenericMessage(castMessage *channel.CastMessage) {
-	if *castMessage.PayloadType == channel.CastMessage_BINARY {
-		session.log.Warn("ignoring message from unimplemented namespace",
-			"namespace", *castMessage.Namespace,
-			"payloadType", "STRING",
-			"payloadUtf8", *castMessage.PayloadUtf8)
-	} else {
-		session.log.Warn("ignoring message from unimplemented namespace",
-			"namespace", *castMessage.Namespace,
-			"payloadType", "BINARY")
-	}
-}
-
 func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 	var request webrtcOfferMessage
 	err := json.Unmarshal([]byte(*castMessage.PayloadUtf8), &request)
@@ -164,7 +151,9 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 			}
 
 			sendRtcp := func(buffer []byte, addr net.Addr) {
-				session.packetConn.WriteTo(buffer, addr)
+				if _, err := session.packetConn.WriteTo(buffer, addr); err != nil {
+					session.log.Warn("failed to write rtcp packet", "err", err)
+				}
 			}
 
 			logger := NewLogger(fmt.Sprintf("stream (%d)", supportedStream.Ssrc))
@@ -209,10 +198,8 @@ func (session *Session) handleWebrtcMessage(castMessage *channel.CastMessage) {
 	switch request.Type {
 	case "OFFER":
 		session.handleWebrtcOffer(castMessage)
-		break
 	default:
 		session.log.Error("unrecognised webrtc request type", "type", request.Type)
-		break
 	}
 }
 
@@ -221,10 +208,8 @@ func (session *Session) HandleCastMessage(castMessage *channel.CastMessage) {
 	case debugNamespace:
 	case mediaNamespace:
 	case remotingNamespace:
-		break
 	case webrtcNamespace:
 		session.handleWebrtcMessage(castMessage)
-		break
 	default:
 
 	}
@@ -243,9 +228,9 @@ func (session *Session) Namespaces() []string {
 
 func (session *Session) Start() {
 	go func() {
-		select {
-		case <-session.stop:
-			session.packetConn.Close()
+		<-session.stop
+		if err := session.packetConn.Close(); err != nil {
+			session.log.Warn("failed to close packet conn", "err", err)
 		}
 	}()
 
@@ -318,7 +303,9 @@ func (session *Session) Start() {
 			}
 		}
 
-		session.packetConn.Close()
+		if err := session.packetConn.Close(); err != nil {
+			session.log.Warn("failed to close packet conn", "err", err)
+		}
 	}()
 }
 

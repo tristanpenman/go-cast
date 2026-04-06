@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"os"
 
-	. "github.com/tristanpenman/go-cast/internal"
+	"github.com/tristanpenman/go-cast/internal"
 )
 
-var log = NewLogger("main")
+var log = internal.NewLogger("main")
 
 var certManifestDir *string
 var certServiceSalt *string
@@ -59,7 +59,7 @@ func getRoot(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	certManifestPath, err := MakeCertManifestPath(*certManifestDir, timestamp)
+	certManifestPath, err := internal.MakeCertManifestPath(*certManifestDir, timestamp)
 	if err != nil {
 		log.Error("failed to make cert manifest path: " + err.Error())
 		writer.WriteHeader(http.StatusNotFound)

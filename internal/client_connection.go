@@ -175,41 +175,35 @@ func NewClientConnection(
 			log.Info("connection closed")
 		}()
 
-		for {
-			select {
-			case castMessage, ok := <-castChannel.Messages:
-				if !ok {
-					log.Info("channel closed")
-					return
+		for castMessage := range castChannel.Messages {
+			if castMessage != nil {
+				if log.IsDebug() {
+					log.Debug("received", "message", castMessage.String())
+				} else if *castMessage.PayloadType == channel.CastMessage_BINARY {
+					log.Info("received",
+						"namespace", *castMessage.Namespace,
+						"sourceId", *castMessage.SourceId,
+						"destinationId", *castMessage.DestinationId,
+						"payloadType", "BINARY")
+				} else {
+					log.Info("received",
+						"namespace", *castMessage.Namespace,
+						"sourceId", *castMessage.SourceId,
+						"destinationId", *castMessage.DestinationId,
+						"payloadType", "STRING",
+						"payloadUtf8", *castMessage.PayloadUtf8)
 				}
 
-				if castMessage != nil {
-					if log.IsDebug() {
-						log.Debug("received", "message", castMessage.String())
-					} else if *castMessage.PayloadType == channel.CastMessage_BINARY {
-						log.Info("received",
-							"namespace", *castMessage.Namespace,
-							"sourceId", *castMessage.SourceId,
-							"destinationId", *castMessage.DestinationId,
-							"payloadType", "BINARY")
-					} else {
-						log.Info("received",
-							"namespace", *castMessage.Namespace,
-							"sourceId", *castMessage.SourceId,
-							"destinationId", *castMessage.DestinationId,
-							"payloadType", "STRING",
-							"payloadUtf8", *castMessage.PayloadUtf8)
-					}
-
-					if *castMessage.Namespace == deviceAuthNamespace {
-						// device authentication is always handled locally
-						clientConnection.handleDeviceAuthChallenge(castMessage, manifest)
-					} else {
-						clientConnection.handleCastMessage(castMessage)
-					}
+				if *castMessage.Namespace == deviceAuthNamespace {
+					// device authentication is always handled locally
+					clientConnection.handleDeviceAuthChallenge(castMessage, manifest)
+				} else {
+					clientConnection.handleCastMessage(castMessage)
 				}
 			}
 		}
+
+		log.Info("channel closed")
 	}()
 
 	return &clientConnection

@@ -55,13 +55,25 @@ func (stream *Stream) nextPacket() *rtp.Packet {
 
 		payloadReader := bytes.NewReader(packet.Payload)
 		packetIdBytes := make([]byte, 2)
-		payloadReader.Seek(2, io.SeekStart)
-		binary.Read(payloadReader, binary.BigEndian, packetIdBytes)
+		if _, err := payloadReader.Seek(2, io.SeekStart); err != nil {
+			stream.log.Warn("failed to seek packet id", "err", err)
+			continue
+		}
+		if err := binary.Read(payloadReader, binary.BigEndian, packetIdBytes); err != nil {
+			stream.log.Warn("failed to read packet id", "err", err)
+			continue
+		}
 		packetId := binary.BigEndian.Uint16(packetIdBytes)
 
 		maxPacketIdBytes := make([]byte, 2)
-		payloadReader.Seek(4, io.SeekStart)
-		binary.Read(payloadReader, binary.BigEndian, maxPacketIdBytes)
+		if _, err := payloadReader.Seek(4, io.SeekStart); err != nil {
+			stream.log.Warn("failed to seek max packet id", "err", err)
+			continue
+		}
+		if err := binary.Read(payloadReader, binary.BigEndian, maxPacketIdBytes); err != nil {
+			stream.log.Warn("failed to read max packet id", "err", err)
+			continue
+		}
 		maxPacketId := binary.BigEndian.Uint16(maxPacketIdBytes)
 
 		if packetId == stream.nextPacketId && frameId == stream.nextFrameId {
@@ -93,13 +105,25 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet, addr net.Addr) {
 	payloadReader := bytes.NewReader(packet.Payload)
 
 	packetIdBytes := make([]byte, 2)
-	payloadReader.Seek(2, io.SeekStart)
-	binary.Read(payloadReader, binary.BigEndian, packetIdBytes)
+	if _, err := payloadReader.Seek(2, io.SeekStart); err != nil {
+		stream.log.Warn("failed to seek packet id", "err", err)
+		return
+	}
+	if err := binary.Read(payloadReader, binary.BigEndian, packetIdBytes); err != nil {
+		stream.log.Warn("failed to read packet id", "err", err)
+		return
+	}
 	packetId := binary.BigEndian.Uint16(packetIdBytes)
 
 	maxPacketIdBytes := make([]byte, 2)
-	payloadReader.Seek(4, io.SeekStart)
-	binary.Read(payloadReader, binary.BigEndian, maxPacketIdBytes)
+	if _, err := payloadReader.Seek(4, io.SeekStart); err != nil {
+		stream.log.Warn("failed to seek max packet id", "err", err)
+		return
+	}
+	if err := binary.Read(payloadReader, binary.BigEndian, maxPacketIdBytes); err != nil {
+		stream.log.Warn("failed to read max packet id", "err", err)
+		return
+	}
 	maxPacketId := binary.BigEndian.Uint16(maxPacketIdBytes)
 
 	stream.log.Info("frame",
@@ -115,16 +139,25 @@ func (stream *Stream) handleDataPacket(packet *rtp.Packet, addr net.Addr) {
 
 	offset := 6
 	if hasRef {
-		payloadReader.Seek(int64(offset), io.SeekStart)
+		if _, err := payloadReader.Seek(int64(offset), io.SeekStart); err != nil {
+			stream.log.Warn("failed to seek reference id", "err", err)
+			return
+		}
 		refId, _ := payloadReader.ReadByte()
 		stream.log.Debug(fmt.Sprintf("ref id: %d", refId))
 		offset++
 	}
 
 	for i := 0; i < numExt; i++ {
-		payloadReader.Seek(int64(offset), io.SeekStart)
+		if _, err := payloadReader.Seek(int64(offset), io.SeekStart); err != nil {
+			stream.log.Warn("failed to seek extension header", "err", err)
+			return
+		}
 		typeAndSizeBytes := make([]byte, 2)
-		binary.Read(payloadReader, binary.BigEndian, typeAndSizeBytes)
+		if err := binary.Read(payloadReader, binary.BigEndian, typeAndSizeBytes); err != nil {
+			stream.log.Warn("failed to read extension header", "err", err)
+			return
+		}
 
 		typeAndSize := int(binary.BigEndian.Uint16(typeAndSizeBytes))
 		dataType := typeAndSize >> 10
@@ -178,11 +211,8 @@ func (stream *Stream) handleRtcpPackets(packets []rtcp.Packet, addr net.Addr) {
 				payload := append(extReportBytes, recvReportBytes...)
 				stream.sendRtcp(payload, addr)
 			}()
-
-			break
 		default:
 			stream.log.Info("skipping rtcp packet")
-			break
 		}
 	}
 }

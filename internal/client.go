@@ -87,32 +87,26 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 	}
 
 	go func() {
-		for {
-			select {
-			case castMessage, ok := <-castChannel.Messages:
-				if ok {
-					if castMessage != nil {
-						if log.IsDebug() {
-							log.Debug("received message", "content", castMessage)
-						} else {
-							log.Info("received message", "namespace", *castMessage.Namespace)
-						}
-					}
-
-					//client.Incoming <- castMessage
-
-					if *castMessage.Namespace == deviceAuthNamespace {
-						client.verifyDeviceAuthResponse(castMessage.PayloadBinary)
-					}
+		for castMessage := range castChannel.Messages {
+			if castMessage != nil {
+				if log.IsDebug() {
+					log.Debug("received message", "content", castMessage)
 				} else {
-					log.Info("channel closed")
-					_ = conn.Close()
-					if wg != nil {
-						wg.Done()
-					}
-					return
+					log.Info("received message", "namespace", *castMessage.Namespace)
 				}
 			}
+
+			//client.Incoming <- castMessage
+
+			if castMessage != nil && *castMessage.Namespace == deviceAuthNamespace {
+				client.verifyDeviceAuthResponse(castMessage.PayloadBinary)
+			}
+		}
+
+		log.Info("channel closed")
+		_ = conn.Close()
+		if wg != nil {
+			wg.Done()
 		}
 	}()
 

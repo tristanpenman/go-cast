@@ -209,8 +209,9 @@ func (receiver *Receiver) handleStop(data string) {
 		return
 	}
 
-	receiver.device.stopApplication(request.SessionId)
-
+	if err := receiver.device.stopApplication(request.SessionId); err != nil {
+		receiver.log.Error("failed to stop application", "err", err)
+	}
 	receiver.handleGetStatus(request.RequestId)
 }
 
@@ -225,19 +226,14 @@ func (receiver *Receiver) handleReceiverMessage(castMessage *channel.CastMessage
 	switch parsed.Type {
 	case "GET_APP_AVAILABILITY":
 		receiver.handleGetAppAvailability(*castMessage.PayloadUtf8)
-		break
 	case "GET_STATUS":
 		receiver.handleGetStatus(parsed.RequestId)
-		break
 	case "LAUNCH":
 		receiver.handleLaunch(*castMessage.PayloadUtf8)
-		break
 	case "STOP":
 		receiver.handleStop(*castMessage.PayloadUtf8)
-		break
 	default:
 		receiver.log.Error("unknown receiver message type", "type", parsed.Type)
-		break
 	}
 }
 
