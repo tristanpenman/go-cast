@@ -96,16 +96,18 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 				} else {
 					log.Info("received message", "namespace", *castMessage.Namespace)
 				}
+
+				if *castMessage.Namespace == deviceAuthNamespace {
+					client.verifyDeviceAuthResponse(castMessage.PayloadBinary)
+					continue
+				}
 			}
 
-			//client.Incoming <- castMessage
-
-			if castMessage != nil && *castMessage.Namespace == deviceAuthNamespace {
-				client.verifyDeviceAuthResponse(castMessage.PayloadBinary)
-			}
+			client.Incoming <- castMessage
 		}
 
 		log.Info("channel closed")
+		close(client.Incoming)
 		_ = conn.Close()
 		if wg != nil {
 			wg.Done()
