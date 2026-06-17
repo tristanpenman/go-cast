@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tristanpenman/go-cast/internal"
-	"github.com/tristanpenman/go-cast/internal/sender"
+	"github.com/tristanpenman/go-cast/internal/client"
+	"github.com/tristanpenman/go-cast/internal/common"
 )
 
 const (
@@ -15,7 +15,7 @@ const (
 	youtubeAppID   = "233637DE"
 )
 
-var log = internal.NewLogger("main")
+var log = common.NewLogger("main")
 
 func main() {
 	var disableChallenge = flag.Bool("disable-challenge", false, "disable auth challenge")
@@ -48,7 +48,7 @@ func main() {
 			return
 		}
 
-		videoID, err := sender.ParseYouTubeVideoID(*youtubeURL)
+		videoID, err := client.ParseYouTubeVideoID(*youtubeURL)
 		if err != nil {
 			log.Error("youtube URL is invalid", "youtube-url", *youtubeURL, "err", err)
 			return
@@ -74,12 +74,13 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	client := internal.NewClient(*hostname, *port, !*disableChallenge, &wg)
-	if client == nil {
+	castClient, err := client.NewClient(*hostname, *port, !*disableChallenge, &wg)
+	if err != nil {
+		log.Error("failed to connect to receiver", "err", err)
 		return
 	}
 
-	s := sender.New(client, log)
+	s := client.NewSender(castClient, log)
 	s.Connect()
 	s.RequestStatus()
 	s.LaunchApp(effectiveAppID)
@@ -87,7 +88,7 @@ func main() {
 	transportID, err := s.WaitForApp(effectiveAppID, 10*time.Second)
 	if err != nil {
 		log.Error("failed to launch app", "err", err)
-		_ = client.Close()
+		_ = castClient.Close()
 		wg.Wait()
 		return
 	}
@@ -105,6 +106,6 @@ func main() {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	_ = client.Close()
+	_ = castClient.Close()
 	wg.Wait()
 }

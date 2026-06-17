@@ -2,9 +2,9 @@ package main
 
 import "flag"
 
-import "github.com/tristanpenman/go-cast/internal"
+import "github.com/tristanpenman/go-cast/internal/common"
 
-var log = internal.NewLogger("main")
+var log = common.NewLogger("main")
 
 func main() {
 	var certManifest = flag.String("cert-manifest", "", "path to certificate manifest")
@@ -26,9 +26,9 @@ func main() {
 	var err error
 
 	if *certManifest != "" {
-		manifest, err = internal.ReadManifest(log, *certManifest, *fixNewlines)
+		manifest, err = common.ReadManifest(log, *certManifest, *fixNewlines)
 		if err != nil {
-			log.Error("failed to read manifest: " + err.Error())
+			log.Error("failed to read manifest", "err", err)
 			return
 		}
 	} else if *certService != "" {
@@ -36,17 +36,17 @@ func main() {
 			log.Error("missing cert service salt")
 			return
 		}
-		manifest, err = internal.DownloadManifest(log, *certService, *certServiceSalt)
+		manifest, err = common.DownloadManifest(log, *certService, *certServiceSalt)
 		if err != nil {
-			log.Error("failed to download manifest: " + err.Error())
+			log.Error("failed to download manifest", "err", err)
 		}
 	}
 
 	if *printManifest {
-		internal.PrintManifest(manifest)
+		common.PrintManifest(manifest)
 	}
 
 	if *verifySignature {
-		internal.VerifySignature(manifest, *useSha256)
+		common.VerifySignature(manifest, *useSha256)
 	}
 }

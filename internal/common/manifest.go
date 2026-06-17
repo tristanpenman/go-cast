@@ -1,4 +1,4 @@
-package internal
+package common
 
 import (
 	"bytes"
@@ -16,15 +16,16 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/big"
 	"net/http"
+	"os"
 	"path"
 	"strconv"
 	"strings"
 	"time"
 
+	// third-party
 	"github.com/grantae/certinfo"
 	"github.com/hashicorp/go-hclog"
 	"github.com/tristanpenman/go-cast/internal/channel"
@@ -88,7 +89,7 @@ func DownloadManifest(log hclog.Logger, certService string, certServiceSalt stri
 		return nil, fmt.Errorf("bad server response: %s", resp.Status)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
@@ -151,7 +152,7 @@ func PrintManifest(manifest map[string]string) {
 }
 
 func ReadManifest(log hclog.Logger, certManifest string, fixNewlines bool) (map[string]string, error) {
-	data, err := ioutil.ReadFile(certManifest)
+	data, err := os.ReadFile(certManifest)
 	if err != nil {
 		return nil, err
 	}

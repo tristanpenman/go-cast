@@ -1,4 +1,4 @@
-package sender
+package client
 
 import (
 	"encoding/json"
@@ -7,22 +7,18 @@ import (
 	"sync"
 	"time"
 
+	// third-party
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/tristanpenman/go-cast/internal"
+	// internal
 	"github.com/tristanpenman/go-cast/internal/channel"
+	"github.com/tristanpenman/go-cast/internal/common"
 )
 
 // Default source and destination IDs used for the receiver control channel.
 const (
 	DefaultSenderID   = "sender-0"
 	DefaultReceiverID = "receiver-0"
-)
-
-const (
-	receiverNamespace   = "urn:x-cast:com.google.cast.receiver"
-	connectionNamespace = "urn:x-cast:com.google.cast.tp.connection"
-	heartbeatNamespace  = "urn:x-cast:com.google.cast.tp.heartbeat"
 )
 
 // Application describes a running receiver application, as reported by a
@@ -64,12 +60,12 @@ type errorMessage struct {
 	Reason string `json:"reason"`
 }
 
-// Sender wraps an internal.Client and implements the Cast sender protocol:
+// Sender wraps a Client and implements the Cast sender protocol:
 // connecting and authenticating to a receiver, sending CONNECT, GET_STATUS,
 // LAUNCH and app namespace messages, and tracking the receiver's reported
 // status, running sessions, transport IDs and errors.
 type Sender struct {
-	client *internal.Client
+	client *Client
 	log    hclog.Logger
 
 	senderID   string
@@ -83,11 +79,11 @@ type Sender struct {
 	closed    bool
 }
 
-// New creates a Sender that drives the given client and starts consuming
+// NewSender creates a Sender that drives the given client and starts consuming
 // incoming messages to track receiver state.
-func New(client *internal.Client, log hclog.Logger) *Sender {
+func NewSender(client *Client, log hclog.Logger) *Sender {
 	if log == nil {
-		log = internal.NewLogger("sender")
+		log = common.NewLogger("sender")
 	}
 
 	s := &Sender{
@@ -137,14 +133,14 @@ func (s *Sender) ConnectTransport(transportID string) {
 
 func (s *Sender) sendConnection(sourceID, destinationID string) {
 	payload := `{"type":"CONNECT"}`
-	s.client.SendMessage(newUTF8CastMessage(connectionNamespace, sourceID, destinationID, payload))
+	s.client.SendMessage(newUTF8CastMessage(common.ConnectionNamespace, sourceID, destinationID, payload))
 }
 
 // RequestStatus sends a GET_STATUS message to the receiver.
 func (s *Sender) RequestStatus() {
 	request := requestMessage{RequestID: s.nextRequestID(), Type: "GET_STATUS"}
 	payloadBytes, _ := json.Marshal(request)
-	s.client.SendMessage(newUTF8CastMessage(receiverNamespace, s.senderID, s.receiverID, string(payloadBytes)))
+	s.client.SendMessage(newUTF8CastMessage(common.ReceiverNamespace, s.senderID, s.receiverID, string(payloadBytes)))
 }
 
 // LaunchApp sends a LAUNCH message asking the receiver to start an app.
@@ -154,7 +150,7 @@ func (s *Sender) LaunchApp(appID string) {
 		AppID:          appID,
 	}
 	payloadBytes, _ := json.Marshal(request)
-	s.client.SendMessage(newUTF8CastMessage(receiverNamespace, s.senderID, s.receiverID, string(payloadBytes)))
+	s.client.SendMessage(newUTF8CastMessage(common.ReceiverNamespace, s.senderID, s.receiverID, string(payloadBytes)))
 }
 
 // SendAppMessage sends a UTF-8 payload on an app-specific namespace to a
@@ -246,11 +242,11 @@ func (s *Sender) readLoop() {
 		}
 
 		switch *castMessage.Namespace {
-		case heartbeatNamespace:
+		case common.HeartbeatNamespace:
 			if castMessage.PayloadUtf8 != nil && *castMessage.PayloadUtf8 == `{"type":"PING"}` {
-				s.SendAppMessage(heartbeatNamespace, s.receiverID, `{"type":"PONG"}`)
+				s.SendAppMessage(common.HeartbeatNamespace, s.receiverID, `{"type":"PONG"}`)
 			}
-		case receiverNamespace:
+		case common.ReceiverNamespace:
 			s.handleReceiverMessage(castMessage)
 		}
 	}

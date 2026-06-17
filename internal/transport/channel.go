@@ -1,13 +1,15 @@
-package internal
+package transport
 
 import (
 	"encoding/binary"
-	"fmt"
+	"io"
 	"net"
 
+	// third-party
 	"github.com/hashicorp/go-hclog"
 	"google.golang.org/protobuf/proto"
 
+	// internal
 	"github.com/tristanpenman/go-cast/internal/channel"
 )
 
@@ -17,13 +19,14 @@ type CastChannel struct {
 	Messages chan *channel.CastMessage
 }
 
-func CreateCastChannel(conn net.Conn, log hclog.Logger) CastChannel {
-	messages := make(chan *channel.CastMessage)
+// NewCastChannel creates a framed Cast transport and starts its read loop.
+func NewCastChannel(conn net.Conn, log hclog.Logger) CastChannel {
+	messages := make(chan *channel.CastMessage, 64)
 
 	go func() {
 		for {
 			lenBytes := make([]byte, 4)
-			n, err := conn.Read(lenBytes)
+			n, err := io.ReadFull(conn, lenBytes)
 			if err != nil {
 				log.Error("failed to read length", "err", err)
 				break
@@ -35,13 +38,10 @@ func CreateCastChannel(conn net.Conn, log hclog.Logger) CastChannel {
 			}
 
 			lenInt := binary.BigEndian.Uint32(lenBytes)
-			if log.IsDebug() {
-				log.Debug(fmt.Sprintf("Message length: %d", lenInt))
-			}
+			log.Debug("message length", "bytes", lenInt)
 
-			// TODO: Make this handle split header and body packets properly
 			msgBytes := make([]byte, lenInt)
-			n, err = conn.Read(msgBytes)
+			n, err = io.ReadFull(conn, msgBytes)
 			if err != nil {
 				log.Error("failed to read message", "err", err)
 				break
@@ -52,9 +52,7 @@ func CreateCastChannel(conn net.Conn, log hclog.Logger) CastChannel {
 				break
 			}
 
-			if log.IsDebug() {
-				log.Debug(fmt.Sprintf("Read: %d", n))
-			}
+			log.Debug("read message", "bytes", n)
 
 			var castMessage channel.CastMessage
 			err = proto.Unmarshal(msgBytes[:n], &castMessage)
@@ -63,9 +61,7 @@ func CreateCastChannel(conn net.Conn, log hclog.Logger) CastChannel {
 				break
 			}
 
-			if log.IsDebug() {
-				log.Debug("Received message", "namespace", *castMessage.Namespace)
-			}
+			log.Debug("received message", "namespace", *castMessage.Namespace)
 
 			messages <- &castMessage
 		}
@@ -80,6 +76,12 @@ func CreateCastChannel(conn net.Conn, log hclog.Logger) CastChannel {
 	}
 }
 
+// CreateCastChannel is retained for compatibility. New code should use
+// NewCastChannel.
+func CreateCastChannel(conn net.Conn, log hclog.Logger) CastChannel {
+	return NewCastChannel(conn, log)
+}
+
 func (castChannel *CastChannel) Send(castMessage *channel.CastMessage) bool {
 	msgBytes, err := proto.Marshal(castMessage)
 	if err != nil {
@@ -89,15 +91,29 @@ func (castChannel *CastChannel) Send(castMessage *channel.CastMessage) bool {
 
 	lenBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenBytes, uint32(len(msgBytes)))
-	if _, err := castChannel.conn.Write(lenBytes); err != nil {
+	if err := writeFull(castChannel.conn, lenBytes); err != nil {
 		castChannel.log.Error("failed to send cast message header", "err", err)
 		return false
 	}
 
-	if _, err := castChannel.conn.Write(msgBytes); err != nil {
+	if err := writeFull(castChannel.conn, msgBytes); err != nil {
 		castChannel.log.Error("failed to send cast message payload", "err", err)
 		return false
 	}
 
 	return true
+}
+
+func writeFull(writer io.Writer, data []byte) error {
+	for len(data) > 0 {
+		n, err := writer.Write(data)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return io.ErrShortWrite
+		}
+		data = data[n:]
+	}
+	return nil
 }

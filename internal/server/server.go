@@ -1,13 +1,16 @@
-package internal
+package server
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
-	"sync"
 
+	// third-party
 	"github.com/hashicorp/go-hclog"
+
+	"github.com/tristanpenman/go-cast/internal/common"
 )
 
 type Server struct {
@@ -15,32 +18,28 @@ type Server struct {
 	listener          net.Listener
 	log               hclog.Logger
 	nextClientId      int
-	open              bool
-	wg                *sync.WaitGroup
 }
 
+// NewServer starts a TLS listener for Cast client connections.
 func NewServer(
 	device *Device,
 	manifest map[string]string,
 	clientPrefix *string,
 	iface *string,
 	port int,
-	wg *sync.WaitGroup,
-) *Server {
-	var log = NewLogger("server")
+) (*Server, error) {
+	var log = common.NewLogger("server")
 
 	cert, err := tls.X509KeyPair([]byte(manifest["pu"]), []byte(manifest["pr"]))
 	if err != nil {
-		log.Error("failed to load X509 keypair", "err", err)
-		return nil
+		return nil, fmt.Errorf("load X509 keypair: %w", err)
 	}
 
 	cfg := &tls.Config{Certificates: []tls.Certificate{cert}}
 	addr := fmt.Sprintf("%s:%d", *iface, port)
 	listener, err := tls.Listen("tcp", addr, cfg)
 	if err != nil {
-		log.Error("failed to listen", "err", err)
-		return nil
+		return nil, fmt.Errorf("listen for Cast connections: %w", err)
 	}
 
 	log.Info("listening")
@@ -50,20 +49,17 @@ func NewServer(
 		listener:          listener,
 		log:               log,
 		nextClientId:      0,
-		open:              true,
-		wg:                wg,
 	}
 
 	go func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
-				if server.open {
-					log.Error("server accept failed", "err", err)
-					continue
-				} else {
+				if errors.Is(err, net.ErrClosed) {
 					break
 				}
+				log.Error("server accept failed", "err", err)
+				continue
 			}
 
 			if clientPrefix == nil || strings.HasPrefix(conn.RemoteAddr().String(), *clientPrefix) {
@@ -79,14 +75,13 @@ func NewServer(
 		}
 	}()
 
-	return &server
+	return &server, nil
 }
 
-func (server *Server) StopListening() {
-	server.open = false
-	err := server.listener.Close()
-	if err != nil {
-		server.log.Error("failed to stop listening", "err", err)
-		server.wg.Done()
+// StopListening stops the server from accepting new connections.
+func (server *Server) StopListening() error {
+	if err := server.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+		return fmt.Errorf("stop listening: %w", err)
 	}
+	return nil
 }

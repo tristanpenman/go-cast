@@ -1,4 +1,4 @@
-package internal
+package client
 
 import (
 	"crypto/tls"
@@ -6,14 +6,18 @@ import (
 	"net"
 	"sync"
 
+	// third-party
 	"github.com/hashicorp/go-hclog"
 	"google.golang.org/protobuf/proto"
 
+	// internal
 	"github.com/tristanpenman/go-cast/internal/channel"
+	"github.com/tristanpenman/go-cast/internal/common"
+	"github.com/tristanpenman/go-cast/internal/transport"
 )
 
 type Client struct {
-	castChannel  CastChannel
+	castChannel  transport.CastChannel
 	conn         net.Conn
 	deviceAuthWg *sync.WaitGroup
 	Incoming     chan *channel.CastMessage
@@ -33,7 +37,7 @@ func (client *Client) sendDeviceAuthChallenge(deviceAuthWg *sync.WaitGroup) bool
 		return false
 	}
 
-	namespace := deviceAuthNamespace
+	namespace := common.DeviceAuthNamespace
 	payloadType := channel.CastMessage_BINARY
 	protocolVersion := channel.CastMessage_CASTV2_1_0
 	sourceId := "sender-0"
@@ -59,8 +63,9 @@ func (client *Client) verifyDeviceAuthResponse(payloadBytes []byte) {
 	}
 }
 
-func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGroup) *Client {
-	var log = NewLogger("client")
+// NewClient connects to a Cast receiver and starts its inbound message loop.
+func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGroup) (*Client, error) {
+	var log = common.NewLogger("client")
 
 	addr := fmt.Sprintf("%s:%d", hostname, port)
 	log.Info(fmt.Sprintf("addr: %s", addr))
@@ -68,13 +73,12 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 	config := tls.Config{InsecureSkipVerify: true}
 	conn, err := tls.Dial("tcp", addr, &config)
 	if err != nil {
-		log.Error("client: dial error", "err", err)
-		return nil
+		return nil, fmt.Errorf("connect to receiver: %w", err)
 	}
 
 	log.Info("Connected")
 
-	castChannel := CreateCastChannel(conn, log)
+	castChannel := transport.NewCastChannel(conn, log)
 
 	client := Client{
 		castChannel: castChannel,
@@ -97,7 +101,7 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 					log.Info("received message", "namespace", *castMessage.Namespace)
 				}
 
-				if *castMessage.Namespace == deviceAuthNamespace {
+				if *castMessage.Namespace == common.DeviceAuthNamespace {
 					client.verifyDeviceAuthResponse(castMessage.PayloadBinary)
 					continue
 				}
@@ -114,7 +118,7 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 		}
 	}()
 
-	return &client
+	return &client, nil
 }
 
 func (client *Client) SendMessage(castMessage *channel.CastMessage) {

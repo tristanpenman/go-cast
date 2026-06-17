@@ -1,4 +1,4 @@
-package internal
+package server
 
 import (
 	"encoding/base64"
@@ -7,19 +7,22 @@ import (
 	"fmt"
 	"net"
 
+	// third-party
 	"github.com/hashicorp/go-hclog"
 	"google.golang.org/protobuf/proto"
 
+	// internal
 	"github.com/tristanpenman/go-cast/internal/channel"
+	"github.com/tristanpenman/go-cast/internal/common"
+	"github.com/tristanpenman/go-cast/internal/transport"
 )
 
 type ClientConnection struct {
-	castChannel CastChannel
+	castChannel transport.CastChannel
 	conn        net.Conn
 	device      *Device
 	id          int
 	log         hclog.Logger
-	sessions    map[string]*Session
 }
 
 func (clientConnection *ClientConnection) sendBinary(namespace string, payloadBinary []byte, sourceId string, destinationId string) {
@@ -89,7 +92,7 @@ func (clientConnection *ClientConnection) handleConnectMessage(castMessage *chan
 }
 
 func (clientConnection *ClientConnection) handleCastMessage(castMessage *channel.CastMessage) {
-	if *castMessage.Namespace == connectionNamespace {
+	if *castMessage.Namespace == common.ConnectionNamespace {
 		// CONNECT messages are special, and are essentially used to
 		// subscribe to status updates from a receiver
 		clientConnection.handleConnectMessage(castMessage)
@@ -117,7 +120,7 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cha
 	// Signature is just base64
 	sig, _ := base64.StdEncoding.DecodeString(manifest["sig"])
 
-	hashAlgorithm := DetectAlgorithm(cpu, pu, sig)
+	hashAlgorithm := common.DetectAlgorithm(cpu, pu, sig)
 	if hashAlgorithm == nil {
 		clientConnection.log.Warn("failed to identify hashing algorithm")
 	} else if *hashAlgorithm == channel.HashAlgorithm_SHA1 {
@@ -143,7 +146,7 @@ func (clientConnection *ClientConnection) handleDeviceAuthChallenge(message *cha
 		return
 	}
 
-	clientConnection.sendBinary(deviceAuthNamespace, payloadBinary, *message.DestinationId, *message.SourceId)
+	clientConnection.sendBinary(common.DeviceAuthNamespace, payloadBinary, *message.DestinationId, *message.SourceId)
 }
 
 func NewClientConnection(
@@ -152,16 +155,15 @@ func NewClientConnection(
 	id int,
 	manifest map[string]string,
 ) *ClientConnection {
-	log := NewLogger(fmt.Sprintf("client-connection (%d)", id))
+	log := common.NewLogger(fmt.Sprintf("client-connection (%d)", id))
 
-	castChannel := CreateCastChannel(conn, log)
+	castChannel := transport.NewCastChannel(conn, log)
 
 	clientConnection := ClientConnection{
 		castChannel: castChannel,
 		conn:        conn,
 		device:      device,
 		id:          id,
-		sessions:    make(map[string]*Session),
 		log:         log,
 	}
 
@@ -194,7 +196,7 @@ func NewClientConnection(
 						"payloadUtf8", *castMessage.PayloadUtf8)
 				}
 
-				if *castMessage.Namespace == deviceAuthNamespace {
+				if *castMessage.Namespace == common.DeviceAuthNamespace {
 					// device authentication is always handled locally
 					clientConnection.handleDeviceAuthChallenge(castMessage, manifest)
 				} else {

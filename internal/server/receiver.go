@@ -1,4 +1,4 @@
-package internal
+package server
 
 import (
 	"encoding/json"
@@ -7,6 +7,8 @@ import (
 	"github.com/hashicorp/go-hclog"
 
 	"github.com/tristanpenman/go-cast/internal/channel"
+	"github.com/tristanpenman/go-cast/internal/common"
+	"github.com/tristanpenman/go-cast/internal/session"
 )
 
 type Receiver struct {
@@ -83,7 +85,7 @@ func (receiver *Receiver) handleGetAppAvailability(data string) {
 
 	// broadcast app availability to all subscribers
 	payloadUtf8 := string(bytes)
-	receiver.device.broadcastUtf8(receiverNamespace, &payloadUtf8, receiver.id)
+	receiver.device.broadcastUtf8(common.ReceiverNamespace, &payloadUtf8, receiver.id)
 }
 
 type Volume struct {
@@ -128,7 +130,7 @@ func marshallNamespaces(namespaces []string) []Namespace {
 	return marshalled
 }
 
-func marshallApplicationStatuses(sessions map[string]*Session) []Application {
+func marshallApplicationStatuses(sessions map[string]*session.Session) []Application {
 	marshalled := make([]Application, len(sessions))
 	var index = 0
 	for _, session := range sessions {
@@ -139,7 +141,7 @@ func marshallApplicationStatuses(sessions map[string]*Session) []Application {
 			Namespaces:   marshallNamespaces(session.Namespaces()),
 			SessionId:    session.SessionId,
 			StatusText:   session.StatusText,
-			TransportId:  session.TransportId(),
+			TransportId:  session.TransportID(),
 		}
 		index++
 	}
@@ -170,7 +172,7 @@ func (receiver *Receiver) handleGetStatus(requestId int) {
 	}
 
 	payloadUtf8 := string(bytes)
-	receiver.device.broadcastUtf8(receiverNamespace, &payloadUtf8, receiver.id)
+	receiver.device.broadcastUtf8(common.ReceiverNamespace, &payloadUtf8, receiver.id)
 }
 
 type launchRequest struct {
@@ -301,7 +303,7 @@ func (receiver *Receiver) handleDiscoveryMessage(castMessage *channel.CastMessag
 	}
 
 	payloadUtf8 := string(bytes)
-	receiver.device.sendUtf8(discoveryNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
+	receiver.device.SendUTF8(common.DiscoveryNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
 }
 
 // ================================================================================================
@@ -341,7 +343,7 @@ func (receiver *Receiver) handleHeartbeatMessage(castMessage *channel.CastMessag
 	}
 
 	payloadUtf8 := string(bytes)
-	receiver.device.sendUtf8(heartbeatNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
+	receiver.device.SendUTF8(common.HeartbeatNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
 }
 
 // ================================================================================================
@@ -415,7 +417,7 @@ func (receiver *Receiver) handleSetupMessage(castMessage *channel.CastMessage) {
 	}
 
 	payloadUtf8 := string(bytes)
-	receiver.device.sendUtf8(setupNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
+	receiver.device.SendUTF8(common.SetupNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
 }
 
 // ================================================================================================
@@ -425,16 +427,16 @@ func (receiver *Receiver) handleSetupMessage(castMessage *channel.CastMessage) {
 
 func (receiver *Receiver) HandleCastMessage(castMessage *channel.CastMessage) {
 	switch *castMessage.Namespace {
-	case heartbeatNamespace:
+	case common.HeartbeatNamespace:
 		receiver.handleHeartbeatMessage(castMessage)
 		return
-	case discoveryNamespace:
+	case common.DiscoveryNamespace:
 		receiver.handleDiscoveryMessage(castMessage)
 		return
-	case receiverNamespace:
+	case common.ReceiverNamespace:
 		receiver.handleReceiverMessage(castMessage)
 		return
-	case setupNamespace:
+	case common.SetupNamespace:
 		receiver.handleSetupMessage(castMessage)
 		return
 	default:
@@ -442,7 +444,7 @@ func (receiver *Receiver) HandleCastMessage(castMessage *channel.CastMessage) {
 	}
 }
 
-func (receiver *Receiver) TransportId() string {
+func (receiver *Receiver) TransportID() string {
 	return receiver.id
 }
 
@@ -452,7 +454,7 @@ func (receiver *Receiver) TransportId() string {
 //
 
 func NewReceiver(device *Device, id string, clientId int) *Receiver {
-	log := NewLogger(fmt.Sprintf("receiver (%d) [%s]", clientId, id))
+	log := common.NewLogger(fmt.Sprintf("receiver (%d) [%s]", clientId, id))
 
 	return &Receiver{
 		clientId: clientId,

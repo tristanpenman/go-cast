@@ -1,10 +1,11 @@
-package internal
+package session
 
 import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image"
 	"image/jpeg"
 	"net"
 	"os"
@@ -18,7 +19,13 @@ import (
 
 	// internal
 	"github.com/tristanpenman/go-cast/internal/channel"
+	"github.com/tristanpenman/go-cast/internal/common"
 )
+
+type Device interface {
+	DisplayImage(*image.RGBA)
+	SendUTF8(namespace string, payloadUTF8 *string, sourceID string, destinationID string)
+}
 
 type Session struct {
 	AppId       string
@@ -27,7 +34,7 @@ type Session struct {
 	StatusText  string
 
 	// implementation
-	device      *Device
+	device      Device
 	frameCount  int
 	jpegOutput  bool
 	log         hclog.Logger
@@ -41,7 +48,7 @@ type Session struct {
 }
 
 func (session *Session) GetPort() int {
-	return GetPort(session.packetConn.LocalAddr())
+	return common.GetPort(session.packetConn.LocalAddr())
 }
 
 type WebrtcMessage struct {
@@ -156,7 +163,7 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 				}
 			}
 
-			logger := NewLogger(fmt.Sprintf("stream (%d)", supportedStream.Ssrc))
+			logger := common.NewLogger(fmt.Sprintf("stream (%d)", supportedStream.Ssrc))
 			session.streams[senderSsrc] = NewStream(decode, logger, sendRtcp, receiverSsrc, senderSsrc)
 		}
 	}
@@ -184,7 +191,7 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 	}
 
 	payloadUtf8 := string(bytes)
-	session.device.sendUtf8(webrtcNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
+	session.device.SendUTF8(common.WebRTCNamespace, &payloadUtf8, *castMessage.DestinationId, *castMessage.SourceId)
 }
 
 func (session *Session) handleWebrtcMessage(castMessage *channel.CastMessage) {
@@ -205,10 +212,10 @@ func (session *Session) handleWebrtcMessage(castMessage *channel.CastMessage) {
 
 func (session *Session) HandleCastMessage(castMessage *channel.CastMessage) {
 	switch *castMessage.Namespace {
-	case debugNamespace:
-	case mediaNamespace:
-	case remotingNamespace:
-	case webrtcNamespace:
+	case common.DebugNamespace:
+	case common.MediaNamespace:
+	case common.RemotingNamespace:
+	case common.WebRTCNamespace:
 		session.handleWebrtcMessage(castMessage)
 	default:
 
@@ -218,10 +225,10 @@ func (session *Session) HandleCastMessage(castMessage *channel.CastMessage) {
 func (session *Session) Namespaces() []string {
 	namespaces := make([]string, 4)
 
-	namespaces[0] = debugNamespace
-	namespaces[1] = mediaNamespace
-	namespaces[2] = remotingNamespace
-	namespaces[3] = webrtcNamespace
+	namespaces[0] = common.DebugNamespace
+	namespaces[1] = common.MediaNamespace
+	namespaces[2] = common.RemotingNamespace
+	namespaces[3] = common.WebRTCNamespace
 
 	return namespaces
 }
@@ -234,7 +241,7 @@ func (session *Session) Start() {
 		}
 	}()
 
-	session.log.Info("listening on port", "port", GetPort(session.packetConn.LocalAddr()))
+	session.log.Info("listening on port", "port", common.GetPort(session.packetConn.LocalAddr()))
 
 	go func() {
 		data := make([]byte, 200000)
@@ -314,14 +321,14 @@ func (session *Session) Stop() {
 	close(session.stop)
 }
 
-func (session *Session) TransportId() string {
+func (session *Session) TransportID() string {
 	return session.transportId
 }
 
 func (session *Session) decodeBuffer(payload []byte) {
 	err := vpx.Error(vpx.CodecDecode(session.vpxCtx, string(payload), uint32(len(payload)), nil, 0))
 	if err != nil {
-		session.log.Error("failed to decode buffer: " + err.Error())
+		session.log.Error("failed to decode buffer", "err", err)
 		return
 	}
 
@@ -338,25 +345,25 @@ func (session *Session) decodeBuffer(payload []byte) {
 		if session.jpegOutput {
 			jpegBuffer := new(bytes.Buffer)
 			if err = jpeg.Encode(jpegBuffer, image.ImageYCbCr(), nil); err != nil {
-				session.log.Error("failed to encode jpeg: " + err.Error())
+				session.log.Error("failed to encode jpeg", "err", err)
 				return
 			}
 
 			jpegPath := path.Join("tmp", fmt.Sprintf("%d%s", session.frameCount, ".jpg"))
 			fo, err := os.Create(jpegPath)
 			if err != nil {
-				session.log.Error("failed to create image: " + err.Error())
+				session.log.Error("failed to create image", "err", err)
 				return
 			}
 
 			if _, err := fo.Write(jpegBuffer.Bytes()); err != nil {
-				session.log.Error("failed to write jpeg: " + err.Error())
+				session.log.Error("failed to write jpeg", "err", err)
 				return
 			}
 
 			err = fo.Close()
 			if err != nil {
-				session.log.Warn("failed to close file: " + err.Error())
+				session.log.Warn("failed to close file", "err", err)
 				return
 			}
 		}
@@ -365,8 +372,8 @@ func (session *Session) decodeBuffer(payload []byte) {
 	}
 }
 
-func NewSession(appId string, clientId int, device *Device, displayName string, jpegOutput bool, sessionId string, transportId string) *Session {
-	log := NewLogger(fmt.Sprintf("session (%d) [%s]", clientId, sessionId))
+func NewSession(appId string, clientId int, device Device, displayName string, jpegOutput bool, sessionId string, transportId string) *Session {
+	log := common.NewLogger(fmt.Sprintf("session (%d) [%s]", clientId, sessionId))
 
 	packetConn, err := net.ListenPacket("udp", ":50000")
 	if err != nil {

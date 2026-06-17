@@ -1,40 +1,30 @@
 package main
 
 import (
+	"flag"
+	"log/slog"
 	"time"
 
-	"github.com/hashicorp/mdns"
-
-	"github.com/tristanpenman/go-cast/internal"
+	"github.com/tristanpenman/go-cast/internal/discovery"
 )
 
-var log = internal.NewLogger("main")
-
-func query() {
-	log.Info("query...")
-
-	entries := make(chan *mdns.ServiceEntry, 4)
-	defer close(entries)
-
-	go func() {
-		for entry := range entries {
-			log.Info("got new entry", "name", entry.Name, "addr", entry.AddrV4, "port", entry.Port, "info", entry.InfoFields)
-		}
-	}()
-
-	params := mdns.DefaultParams("_googlecast._tcp")
-	params.DisableIPv6 = true
-	params.Entries = entries
-	params.Timeout = 10 * time.Second
-
-	err := mdns.Query(params)
-	if err != nil {
-		log.Error("error performing mdns lookup", "err", err)
-	}
-}
+var log = slog.Default()
 
 func main() {
-	for {
-		query()
+	timeout := flag.Duration("timeout", 10*time.Second, "how long to search for Cast devices")
+	flag.Parse()
+
+	devices, err := discovery.Discover(*timeout)
+	if err != nil {
+		log.Error("error performing mDNS lookup", "err", err)
+		return
+	}
+	for _, device := range devices {
+		log.Info("found device",
+			"id", device.ID,
+			"name", device.Name,
+			"model", device.Model,
+			"host", device.Host,
+			"port", device.Port)
 	}
 }

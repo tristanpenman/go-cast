@@ -4,13 +4,11 @@ import (
 	"flag"
 	"image"
 	"image/draw"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"path"
 	"runtime"
 	"strconv"
-	"sync"
 	"syscall"
 	"time"
 
@@ -26,47 +24,48 @@ import (
 	_ "golang.org/x/image/font"
 
 	// internal
-	"github.com/tristanpenman/go-cast/internal"
+	"github.com/tristanpenman/go-cast/internal/common"
+	"github.com/tristanpenman/go-cast/internal/server"
 )
 
-var log = internal.NewLogger("main")
+var log = common.NewLogger("main")
 
 func resolveManifest(certManifest string, certManifestDir string, certService string, certServiceSalt string, fixNewlines bool) map[string]string {
 	if certManifest != "" {
-		log.Info("attempting to read manifest from file: " + certManifest)
+		log.Info("attempting to read manifest", "path", certManifest)
 
-		manifest, err := internal.ReadManifest(log, certManifest, fixNewlines)
+		manifest, err := common.ReadManifest(log, certManifest, fixNewlines)
 		if err == nil {
 			return manifest
 		}
 
-		log.Warn("failed to read manifest: " + err.Error())
+		log.Warn("failed to read manifest", "err", err)
 	}
 
 	if certManifestDir != "" {
-		log.Info("attempting to find manifest in directory: " + certManifestDir)
+		log.Info("attempting to find manifest", "directory", certManifestDir)
 
-		manifestPath, err := internal.MakeCertManifestPath(certManifestDir, strconv.FormatInt(time.Now().Unix(), 10))
+		manifestPath, err := common.MakeCertManifestPath(certManifestDir, strconv.FormatInt(time.Now().Unix(), 10))
 		if err != nil {
-			log.Error("failed to make cert manifest path: " + err.Error())
+			log.Error("failed to make cert manifest path", "err", err)
 		}
 
 		if manifestPath != nil {
-			log.Info("attempting to read manifest from file: " + *manifestPath)
+			log.Info("attempting to read manifest", "path", *manifestPath)
 
-			manifest, err := internal.ReadManifest(log, *manifestPath, fixNewlines)
+			manifest, err := common.ReadManifest(log, *manifestPath, fixNewlines)
 			if err == nil {
 				return manifest
 			}
 
-			log.Warn("failed to read manifest: " + err.Error())
+			log.Warn("failed to read manifest", "err", err)
 		}
 	}
 
 	if certService != "" {
-		log.Info("attempting to download manifest from cert service: " + certService)
+		log.Info("attempting to download manifest", "service", certService)
 
-		manifest, err := internal.DownloadManifest(log, certService, certServiceSalt)
+		manifest, err := common.DownloadManifest(log, certService, certServiceSalt)
 		if err == nil {
 			return manifest
 		}
@@ -84,7 +83,7 @@ func init() {
 }
 
 func loadFont(filePath string) (*truetype.Font, error) {
-	fontBytes, err := ioutil.ReadFile(filePath)
+	fontBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +100,7 @@ func loadImage(filePath string) (image.Image, error) {
 	defer func(f *os.File) {
 		err := f.Close()
 		if err != nil {
-			log.Warn("failed to close file: " + filePath)
+			log.Warn("failed to close file", "path", filePath, "err", err)
 		}
 	}(f)
 
@@ -335,26 +334,24 @@ func main() {
 		return
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
-
 	images := make(chan *image.RGBA)
 
 	go func() {
 		id := uuid.New().String()
 		udn := id
-		device := internal.NewDevice(images, *deviceModel, *friendlyName, id, *jpegOutput, udn)
+		device := server.NewDevice(images, *deviceModel, *friendlyName, id, *jpegOutput, udn)
 
-		server := internal.NewServer(device, manifest, clientPrefix, iface, *port, &wg)
-		if server == nil {
+		castServer, err := server.NewServer(device, manifest, clientPrefix, iface, *port)
+		if err != nil {
+			log.Error("failed to start server", "err", err)
 			return
 		}
 
-		var advertisement *internal.Advertisement
+		var advertisement *server.Advertisement
 		if *enableMdns {
-			advertisement = internal.NewAdvertisement(device, *port)
-			if advertisement == nil {
-				log.Error("failed to advertise receiver")
+			advertisement, err = server.NewAdvertisement(device, *port)
+			if err != nil {
+				log.Error("failed to advertise receiver", "err", err)
 			}
 		}
 
@@ -366,7 +363,9 @@ func main() {
 			if advertisement != nil {
 				advertisement.Stop()
 			}
-			server.StopListening()
+			if err := castServer.StopListening(); err != nil {
+				log.Error("failed to stop server", "err", err)
+			}
 			os.Exit(0)
 		}()
 	}()

@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/tristanpenman/go-cast/internal/sender"
+	"github.com/tristanpenman/go-cast/internal/client"
 )
 
 func TestParseYouTubeVideoID(t *testing.T) {
@@ -21,7 +21,7 @@ func TestParseYouTubeVideoID(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := sender.ParseYouTubeVideoID(tc.url)
+			got, err := client.ParseYouTubeVideoID(tc.url)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -44,7 +44,7 @@ func TestParseYouTubeVideoIDErrors(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got, err := sender.ParseYouTubeVideoID(tc.url); err == nil {
+			if got, err := client.ParseYouTubeVideoID(tc.url); err == nil {
 				t.Fatalf("expected error, got %q", got)
 			}
 		})

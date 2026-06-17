@@ -1,4 +1,4 @@
-package internal
+package session
 
 import (
 	"bytes"
@@ -230,7 +230,7 @@ func (stream *Stream) preparePSFB() []byte {
 
 	payload, err := feedback.Marshal()
 	if err != nil {
-		stream.log.Warn("failed to prepare psfb: " + err.Error())
+		stream.log.Warn("failed to prepare psfb", "err", err)
 		return nil
 	}
 
@@ -251,7 +251,7 @@ func (stream *Stream) prepareExtendedReport(time uint64) []byte {
 
 	payload, err := report.Marshal()
 	if err != nil {
-		stream.log.Warn("failed to prepare ext report: " + err.Error())
+		stream.log.Warn("failed to prepare ext report", "err", err)
 		return nil
 	}
 
@@ -273,7 +273,7 @@ func (stream *Stream) prepareReceiverReport(rtpTime uint32) []byte {
 
 	payload, err := report.Marshal()
 	if err != nil {
-		stream.log.Warn("failed to prepare recv report: " + err.Error())
+		stream.log.Warn("failed to prepare recv report", "err", err)
 		return nil
 	}
 

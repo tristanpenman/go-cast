@@ -1,14 +1,19 @@
-package internal
+package server
 
 import (
 	"errors"
 	"fmt"
 	"image"
 
+	// third-party
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 
+	// internal
 	"github.com/tristanpenman/go-cast/internal/channel"
+	"github.com/tristanpenman/go-cast/internal/common"
+	"github.com/tristanpenman/go-cast/internal/session"
+	"github.com/tristanpenman/go-cast/internal/transport"
 )
 
 const androidMirroringAppId = "674A0243"
@@ -20,7 +25,7 @@ type Subscription struct {
 }
 
 type Transport struct {
-	castTransport CastTransport
+	castTransport transport.CastTransport
 	subscriptions []Subscription
 }
 
@@ -29,7 +34,7 @@ type Device struct {
 	DeviceModel   string
 	FriendlyName  string
 	Id            string
-	Sessions      map[string]*Session
+	Sessions      map[string]*session.Session
 	Udn           string
 
 	// implementation
@@ -74,8 +79,8 @@ func (device *Device) registerSubscription(clientConnection *ClientConnection, r
 	transport.subscriptions = append(transport.subscriptions, subscription)
 }
 
-func (device *Device) registerTransport(castTransport CastTransport) {
-	device.transports[castTransport.TransportId()] = &Transport{
+func (device *Device) registerTransport(castTransport transport.CastTransport) {
+	device.transports[castTransport.TransportID()] = &Transport{
 		castTransport: castTransport,
 		subscriptions: make([]Subscription, 0),
 	}
@@ -102,7 +107,7 @@ func (device *Device) broadcastUtf8(namespace string, payloadUtf8 *string, sourc
 	}
 }
 
-func (device *Device) sendUtf8(namespace string, payloadUtf8 *string, sourceId string, destinationId string) {
+func (device *Device) SendUTF8(namespace string, payloadUtf8 *string, sourceId string, destinationId string) {
 	transport := device.transports[sourceId]
 	if transport == nil {
 		device.log.Error("attempt to send from unregistered transport", "sourceId", sourceId)
@@ -125,22 +130,22 @@ func (device *Device) startAndroidMirroringSession(clientId int) {
 	transportId := fmt.Sprintf("pid-%d", device.nextPid)
 	device.nextPid++
 
-	session := NewSession(androidMirroringAppId, clientId, device, "Android Mirroring", device.jpegOutput, uuid.New().String(), transportId)
-	session.Start()
+	activeSession := session.NewSession(androidMirroringAppId, clientId, device, "Android Mirroring", device.jpegOutput, uuid.New().String(), transportId)
+	activeSession.Start()
 
-	device.Sessions[session.SessionId] = session
-	device.registerTransport(session)
+	device.Sessions[activeSession.SessionId] = activeSession
+	device.registerTransport(activeSession)
 }
 
 func (device *Device) startChromeMirroringSession(clientId int) {
 	transportId := fmt.Sprintf("pid-%d", device.nextPid)
 	device.nextPid++
 
-	session := NewSession(chromeMirroringAppId, clientId, device, "Chrome Mirroring", device.jpegOutput, uuid.New().String(), transportId)
-	session.Start()
+	activeSession := session.NewSession(chromeMirroringAppId, clientId, device, "Chrome Mirroring", device.jpegOutput, uuid.New().String(), transportId)
+	activeSession.Start()
 
-	device.Sessions[session.SessionId] = session
-	device.registerTransport(session)
+	device.Sessions[activeSession.SessionId] = activeSession
+	device.registerTransport(activeSession)
 }
 
 func (device *Device) startApplication(appId string, clientId int) error {
@@ -178,7 +183,7 @@ func (device *Device) DisplayImage(image *image.RGBA) {
 }
 
 func NewDevice(images chan *image.RGBA, deviceModel string, friendlyName string, id string, jpegOutput bool, udn string) *Device {
-	log := NewLogger(fmt.Sprintf("device (%s)", id))
+	log := common.NewLogger(fmt.Sprintf("device (%s)", id))
 
 	// Allow clients to start Android or Chrome mirroring apps
 	availableApps := make([]string, 2)
@@ -190,7 +195,7 @@ func NewDevice(images chan *image.RGBA, deviceModel string, friendlyName string,
 		DeviceModel:   deviceModel,
 		FriendlyName:  friendlyName,
 		Id:            id,
-		Sessions:      map[string]*Session{},
+		Sessions:      map[string]*session.Session{},
 		Udn:           udn,
 
 		// implementation
