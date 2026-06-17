@@ -6,7 +6,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/tristanpenman/go-cast/internal/channel"
+	"github.com/tristanpenman/go-cast/pkg/channel"
 )
 
 type Receiver struct {

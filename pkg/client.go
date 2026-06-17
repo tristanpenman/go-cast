@@ -6,10 +6,12 @@ import (
 	"net"
 	"sync"
 
+	// third-party
 	"github.com/hashicorp/go-hclog"
 	"google.golang.org/protobuf/proto"
 
-	"github.com/tristanpenman/go-cast/internal/channel"
+	// internal
+	"github.com/tristanpenman/go-cast/pkg/channel"
 )
 
 type Client struct {

@@ -5,7 +5,7 @@ import (
 
 	"github.com/hashicorp/mdns"
 
-	"github.com/tristanpenman/go-cast/internal"
+	"github.com/tristanpenman/go-cast/pkg"
 )
 
 var log = internal.NewLogger("main")

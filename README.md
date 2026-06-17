@@ -141,9 +141,9 @@ All development is done using Go 1.18, across Ubuntu Linux and macOS. Support fo
 
 ### Protobuf
 
-The Chromecast protocol relies on message types defined in protobuf format. The cast_channel.proto file in internal/message has been borrowed from the Chromium source code. While this is not likely to change, you can regenerate the Go bindings with the following command:
+The Chromecast protocol relies on message types defined in protobuf format. The cast_channel.proto file in pkg/channel has been borrowed from the Chromium source code. While this is not likely to change, you can regenerate the Go bindings with the following command:
 
-    protoc --go_opt=paths=source_relative --go_out=. ./internal/channel/cast_channel.proto
+    protoc --go_opt=paths=source_relative --go_out=. ./pkg/channel/cast_channel.proto
 
 ## Tests
 
@@ -158,7 +158,7 @@ To run the tests:
 To generate coverage reports:
 
     go test github.com/tristanpenman/go-cast/test \
-        -coverpkg=github.com/tristanpenman/go-cast/internal \
+        -coverpkg=github.com/tristanpenman/go-cast/pkg \
         -coverprofile=coverage.out
 
 This can then be converted to HTML:

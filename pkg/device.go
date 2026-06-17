@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"image"
 
+	// third-party
 	"github.com/google/uuid"
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/tristanpenman/go-cast/internal/channel"
+	// internal
+	"github.com/tristanpenman/go-cast/pkg/channel"
 )
 
 const androidMirroringAppId = "674A0243"

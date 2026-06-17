@@ -7,10 +7,12 @@ import (
 	"sync"
 	"time"
 
+	// third-party
 	"github.com/hashicorp/go-hclog"
 
-	"github.com/tristanpenman/go-cast/internal"
-	"github.com/tristanpenman/go-cast/internal/channel"
+	// internal
+	"github.com/tristanpenman/go-cast/pkg"
+	"github.com/tristanpenman/go-cast/pkg/channel"
 )
 
 // Default source and destination IDs used for the receiver control channel.

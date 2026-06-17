@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/tristanpenman/go-cast/internal/sender"
+	"github.com/tristanpenman/go-cast/pkg/sender"
 )
 
 func TestParseYouTubeVideoID(t *testing.T) {

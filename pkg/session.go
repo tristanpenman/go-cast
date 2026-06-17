@@ -17,7 +17,7 @@ import (
 	"github.com/xlab/libvpx-go/vpx"
 
 	// internal
-	"github.com/tristanpenman/go-cast/internal/channel"
+	"github.com/tristanpenman/go-cast/pkg/channel"
 )
 
 type Session struct {

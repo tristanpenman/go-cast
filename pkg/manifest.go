@@ -25,9 +25,10 @@ import (
 	"strings"
 	"time"
 
+	// third-party
 	"github.com/grantae/certinfo"
 	"github.com/hashicorp/go-hclog"
-	"github.com/tristanpenman/go-cast/internal/channel"
+	"github.com/tristanpenman/go-cast/pkg/channel"
 )
 
 func beginningOfDay(t time.Time) time.Time {

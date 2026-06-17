@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/tristanpenman/go-cast/internal"
+	"github.com/tristanpenman/go-cast/pkg"
 )
 
 var log = internal.NewLogger("main")

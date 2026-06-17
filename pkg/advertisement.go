@@ -3,7 +3,6 @@ package internal
 import (
 	"context"
 
-	// third-party
 	"github.com/brutella/dnssd"
 	"github.com/hashicorp/go-hclog"
 )

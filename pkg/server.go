@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	// third-party
 	"github.com/hashicorp/go-hclog"
 )
 

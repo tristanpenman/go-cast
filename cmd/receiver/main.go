@@ -26,7 +26,7 @@ import (
 	_ "golang.org/x/image/font"
 
 	// internal
-	"github.com/tristanpenman/go-cast/internal"
+	"github.com/tristanpenman/go-cast/pkg"
 )
 
 var log = internal.NewLogger("main")

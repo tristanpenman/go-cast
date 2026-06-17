@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tristanpenman/go-cast/internal"
-	"github.com/tristanpenman/go-cast/internal/sender"
+	"github.com/tristanpenman/go-cast/pkg"
+	"github.com/tristanpenman/go-cast/pkg/sender"
 )
 
 const (

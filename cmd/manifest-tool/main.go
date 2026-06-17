@@ -2,7 +2,7 @@ package main
 
 import "flag"
 
-import "github.com/tristanpenman/go-cast/internal"
+import "github.com/tristanpenman/go-cast/pkg"
 
 var log = internal.NewLogger("main")
 

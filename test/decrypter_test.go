@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	// internal
-	. "github.com/tristanpenman/go-cast/internal"
+	. "github.com/tristanpenman/go-cast/pkg"
 )
 
 func TestNewDecrypterInvalidKeyLength(t *testing.T) {

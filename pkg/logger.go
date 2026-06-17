@@ -1,6 +1,7 @@
 package internal
 
 import (
+	// third-party
 	"github.com/hashicorp/go-hclog"
 )
 
