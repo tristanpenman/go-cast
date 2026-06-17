@@ -4,10 +4,10 @@ Goal is to provide a desktop sender app that discovers Cast devices, shows avail
 
 ## Sender Implementation
 
-1. Extract sender protocol logic from `cmd/sender` into an internal sender package:
-    - Connect/authenticate to a receiver.
-    - Send `CONNECT`, `GET_STATUS`, `LAUNCH`, and app namespace messages.
-    - Track receiver status, running sessions, app IDs, transport IDs, and errors.
+1. ~~Extract sender protocol logic from `cmd/sender` into an internal sender package:~~
+    - ~~Connect/authenticate to a receiver.~~
+    - ~~Send `CONNECT`, `GET_STATUS`, `LAUNCH`, and app namespace messages.~~
+    - ~~Track receiver status, running sessions, app IDs, transport IDs, and errors.~~
 2. Merge discovery into the sender workflow:
     - Reuse the mDNS discovery command logic as a library API.
     - List nearby receivers with friendly name, model, host, port, and connection state.
