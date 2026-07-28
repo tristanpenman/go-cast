@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoCast</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">GOCAST</p>
+          <h1>Choose a device</h1>
+          <p class="subtitle">Chromecast receivers found on your local network.</p>
+        </div>
+        <button id="refresh" type="button">Scan again</button>
+      </header>
+
+      <section aria-live="polite">
+        <div id="status" class="status">Ready to scan.</div>
+        <div id="devices" class="devices"></div>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -78,6 +78,19 @@ Or to build an executable in `./bin/discovery`:
 go build -o ./bin/discovery ./cmd/discovery
 ```
 
+### Desktop Client
+
+The Wails desktop client discovers and lists Google Cast devices on the local network. Install the Wails CLI, then run it from the client directory:
+
+```sh
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+cd cmd/client
+wails dev
+```
+
+The frontend is dependency-free and its static assets are embedded in the Go
+binary, so no Node.js install or frontend build step is required.
+
 ## Cert Manifests
 
 Before running the Receiver app, you will need to create or obtain a valid _certificate manifest_ file. A cert manifest is a JSON document containing the certificate and private key to be used TLS connections, and additional information used for Chromecast device authentication.

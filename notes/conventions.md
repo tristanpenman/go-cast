@@ -75,6 +75,11 @@ These are primarily idioms that apply to this project. They might not apply else
 - Core components use an injected logger or `common.NewLogger`; small commands may retain their established standard-library logger.
 - Do not add a logging dependency solely to standardize existing areas.
 
+### Desktop and frontend
+
+- Keep framework wiring in `cmd/client` and reusable logic in packages.
+- `cmd/client/frontend/dist` is dependency-free and embedded. Do not add a JavaScript build step for small changes.
+
 ## Integrations
 
 ### Protobuf

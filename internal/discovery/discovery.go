@@ -56,6 +56,7 @@ func Discover(timeout time.Duration) ([]Device, error) {
 
 	params := mdns.DefaultParams(service)
 	params.Entries = entries
+	params.DisableIPv6 = true
 	params.Timeout = timeout
 
 	err := mdns.Query(params)

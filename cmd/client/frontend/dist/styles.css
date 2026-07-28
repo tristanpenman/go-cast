@@ -1,0 +1,108 @@
+:root {
+  color: #e9eef8;
+  background: #0d1320;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  min-width: 520px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at 85% 0%, rgba(61, 132, 255, .17), transparent 35%),
+    #0d1320;
+}
+
+main {
+  width: min(800px, calc(100% - 64px));
+  margin: 0 auto;
+  padding: 64px 0;
+}
+
+header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 36px;
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: #6ba0ff;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .2em;
+}
+
+h1 { margin: 0; font-size: 38px; letter-spacing: -.035em; }
+.subtitle { margin: 10px 0 0; color: #93a1b8; }
+
+button {
+  border: 1px solid #467bd4;
+  border-radius: 10px;
+  padding: 11px 16px;
+  color: #f5f8ff;
+  background: #2458b2;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+button:hover { background: #2d67c9; }
+button:disabled { cursor: wait; opacity: .65; }
+
+.status { min-height: 24px; margin-bottom: 14px; color: #93a1b8; font-size: 14px; }
+.status.scanning { color: #8db5ff; }
+.status.error { color: #ff8c8c; }
+.devices { display: grid; gap: 12px; }
+
+.device {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 19px;
+  border: 1px solid #253149;
+  border-radius: 14px;
+  background: rgba(21, 30, 47, .9);
+}
+
+.device-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 12px;
+  color: #8db5ff;
+  background: #1d3154;
+  font-size: 24px;
+}
+
+.device-copy { min-width: 0; flex: 1; }
+.device h2 { margin: 0; font-size: 17px; }
+.device p { margin: 4px 0 6px; color: #93a1b8; font-size: 14px; }
+.device code { color: #6f809c; font-size: 12px; }
+
+.state {
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #76d6aa;
+  background: rgba(42, 128, 91, .18);
+  font-size: 11px;
+  text-transform: capitalize;
+}
+
+.empty {
+  display: grid;
+  gap: 7px;
+  padding: 40px;
+  border: 1px dashed #33415c;
+  border-radius: 14px;
+  color: #d5deed;
+  text-align: center;
+}
+
+.empty span { color: #8795ac; font-size: 14px; }

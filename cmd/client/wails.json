@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "GoCast",
+  "outputfilename": "GoCast",
+  "frontend:dir": "frontend",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "wailsjsdir": "wailsjs",
+  "author": {
+    "name": "Tristan Penman"
+  }
+}

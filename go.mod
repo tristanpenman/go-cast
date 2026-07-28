@@ -1,31 +1,56 @@
 module github.com/tristanpenman/go-cast
 
-go 1.18
+go 1.25.0
 
 require (
 	github.com/brutella/dnssd v1.2.5
 	github.com/go-gl/gl v0.0.0-20211210172815-726fda9656d6
 	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20221017161538-93cebf72946b
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.6.0
 	github.com/grantae/certinfo v0.0.0-20170412194111-59d56a35515b
 	github.com/hashicorp/go-hclog v1.5.0
 	github.com/hashicorp/mdns v1.0.5
 	github.com/pion/rtcp v1.2.10
 	github.com/pion/rtp v1.7.13
+	github.com/wailsapp/wails/v2 v2.13.0
 	github.com/xlab/libvpx-go v0.0.0-20220203233824-652b2616315c
-	golang.org/x/image v0.6.0
+	golang.org/x/image v0.40.0
 	google.golang.org/protobuf v1.30.0
 )
 
 require (
+	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
+	github.com/bep/debounce v1.2.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
-	github.com/mattn/go-colorable v0.1.12 // indirect
-	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/go-ole/go-ole v1.3.0 // indirect
+	github.com/godbus/dbus/v5 v5.1.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
+	github.com/labstack/echo/v4 v4.13.3 // indirect
+	github.com/labstack/gommon v0.4.2 // indirect
+	github.com/leaanthony/go-ansi-parser v1.6.1 // indirect
+	github.com/leaanthony/gosod v1.0.4 // indirect
+	github.com/leaanthony/slicer v1.6.0 // indirect
+	github.com/leaanthony/u v1.1.1 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/miekg/dns v1.1.50 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
-	golang.org/x/mod v0.8.0 // indirect
-	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/tools v0.6.0 // indirect
+	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/rivo/uniseg v0.4.7 // indirect
+	github.com/samber/lo v1.49.1 // indirect
+	github.com/tkrajina/go-reflector v0.5.8 // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasttemplate v1.2.2 // indirect
+	github.com/wailsapp/go-webview2 v1.0.22 // indirect
+	github.com/wailsapp/mimetype v1.4.1 // indirect
+	golang.org/x/crypto v0.51.0 // indirect
+	golang.org/x/mod v0.35.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
+	golang.org/x/tools v0.44.0 // indirect
 )
