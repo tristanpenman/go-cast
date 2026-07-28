@@ -1,4 +1,4 @@
-package test
+package session
 
 import (
 	"bytes"
@@ -6,9 +6,6 @@ import (
 	"crypto/cipher"
 	"encoding/binary"
 	"testing"
-
-	// internal
-	. "github.com/tristanpenman/go-cast/internal"
 )
 
 func TestNewDecrypterInvalidKeyLength(t *testing.T) {

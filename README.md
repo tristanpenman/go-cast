@@ -179,7 +179,9 @@ Tests have been written in the style of unit tests.
 
 To run the tests:
 
-    go test github.com/tristanpenman/go-cast/test -v
+```sh
+go test ./... -v
+```
 
 ### Coverage
 
