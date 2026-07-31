@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/brutella/dnssd"
 	"github.com/hashicorp/go-hclog"
@@ -11,14 +13,18 @@ import (
 )
 
 type Advertisement struct {
-	cancel    context.CancelFunc
-	log       hclog.Logger
-	responder dnssd.Responder
+	cancel   context.CancelFunc
+	done     chan struct{}
+	log      hclog.Logger
+	stopOnce sync.Once
 }
 
 func (advertisement *Advertisement) Stop() {
-	advertisement.cancel()
-	advertisement.log.Info("stopped")
+	advertisement.stopOnce.Do(func() {
+		advertisement.cancel()
+		<-advertisement.done
+		advertisement.log.Info("stopped")
+	})
 }
 
 // NewAdvertisement starts advertising a Cast device over mDNS.
@@ -65,17 +71,19 @@ func NewAdvertisement(device *Device, port int) (*Advertisement, error) {
 	log.Info("starting")
 
 	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
 	go func() {
 		defer cancel()
+		defer close(done)
 		err := responder.Respond(ctx)
-		if err != nil {
+		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Error("failed to start responder", "err", err)
 		}
 	}()
 
 	return &Advertisement{
-		cancel:    cancel,
-		log:       log,
-		responder: responder,
+		cancel: cancel,
+		done:   done,
+		log:    log,
 	}, nil
 }

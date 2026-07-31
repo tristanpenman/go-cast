@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"image"
 	"image/draw"
@@ -108,7 +109,7 @@ func loadImage(filePath string) (image.Image, error) {
 	return decoded, err
 }
 
-func runHeadless(images <-chan *image.RGBA) {
+func runHeadless(images <-chan *image.RGBA, shutdown <-chan struct{}) {
 	log.Info("running in headless mode")
 
 	ticker := time.NewTicker(time.Second)
@@ -121,6 +122,8 @@ func runHeadless(images <-chan *image.RGBA) {
 
 	for {
 		select {
+		case <-shutdown:
+			return
 		case img, ok := <-images:
 			if !ok {
 				log.Info("image channel closed", "frames", totalFrames)
@@ -157,7 +160,7 @@ func runHeadless(images <-chan *image.RGBA) {
 	}
 }
 
-func runWindowed(images <-chan *image.RGBA, assetsDir string) {
+func runWindowed(images <-chan *image.RGBA, assetsDir string, shutdown <-chan struct{}) {
 	err := glfw.Init()
 	if err != nil {
 		panic(err)
@@ -253,6 +256,12 @@ func runWindowed(images <-chan *image.RGBA, assetsDir string) {
 	}()
 
 	for !window.ShouldClose() {
+		select {
+		case <-shutdown:
+			return
+		default:
+		}
+
 		w, h := window.GetSize()
 
 		gl.BindTexture(gl.TEXTURE_2D, texture)
@@ -280,7 +289,9 @@ func runWindowed(images <-chan *image.RGBA, assetsDir string) {
 			gl.LINEAR)
 
 		window.SwapBuffers()
-		glfw.WaitEvents()
+		// Poll the shutdown context periodically so SIGINT and SIGTERM use the
+		// same graceful cleanup path as closing the window.
+		glfw.WaitEventsTimeout(0.25)
 	}
 }
 
@@ -335,45 +346,38 @@ func main() {
 	}
 
 	images := make(chan *image.RGBA)
+	id := uuid.New().String()
+	udn := id
+	device := server.NewDevice(images, *deviceModel, *friendlyName, id, *jpegOutput, udn)
 
-	go func() {
-		id := uuid.New().String()
-		udn := id
-		device := server.NewDevice(images, *deviceModel, *friendlyName, id, *jpegOutput, udn)
-
-		castServer, err := server.NewServer(device, manifest, clientPrefix, iface, *port)
-		if err != nil {
-			log.Error("failed to start server", "err", err)
-			return
+	castServer, err := server.NewServer(device, manifest, clientPrefix, iface, *port)
+	if err != nil {
+		log.Error("failed to start server", "err", err)
+		return
+	}
+	defer func() {
+		if err := castServer.StopListening(); err != nil {
+			log.Error("failed to stop server", "err", err)
 		}
-
-		var advertisement *server.Advertisement
-		if *enableMdns {
-			advertisement, err = server.NewAdvertisement(device, *port)
-			if err != nil {
-				log.Error("failed to advertise receiver", "err", err)
-			}
-		}
-
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
-		go func() {
-			<-c
-			log.Info("interrupted")
-			if advertisement != nil {
-				advertisement.Stop()
-			}
-			if err := castServer.StopListening(); err != nil {
-				log.Error("failed to stop server", "err", err)
-			}
-			os.Exit(0)
-		}()
 	}()
 
+	var advertisement *server.Advertisement
+	if *enableMdns {
+		advertisement, err = server.NewAdvertisement(device, *port)
+		if err != nil {
+			log.Error("failed to advertise receiver", "err", err)
+		} else {
+			defer advertisement.Stop()
+		}
+	}
+
+	shutdown, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopSignals()
+
 	if *headless {
-		runHeadless(images)
+		runHeadless(images, shutdown.Done())
 		return
 	}
 
-	runWindowed(images, *assetsDir)
+	runWindowed(images, *assetsDir, shutdown.Done())
 }
