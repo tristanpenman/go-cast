@@ -18,7 +18,7 @@ import (
 	"github.com/tristanpenman/go-cast/internal/transport"
 )
 
-type Client struct {
+type ServerConnection struct {
 	castChannel     transport.CastChannel
 	conn            net.Conn
 	peerCertificate []byte
@@ -28,7 +28,7 @@ type Client struct {
 	log             hclog.Logger
 }
 
-func (client *Client) sendDeviceAuthChallenge() error {
+func (client *ServerConnection) sendDeviceAuthChallenge() error {
 	deviceAuthMessage := &channel.DeviceAuthMessage{
 		Challenge: &channel.AuthChallenge{},
 	}
@@ -58,7 +58,7 @@ func (client *Client) sendDeviceAuthChallenge() error {
 	return nil
 }
 
-func (client *Client) completeDeviceAuth(err error) {
+func (client *ServerConnection) completeDeviceAuth(err error) {
 	client.authOnce.Do(func() {
 		if client.authResult != nil {
 			client.authResult <- err
@@ -67,7 +67,7 @@ func (client *Client) completeDeviceAuth(err error) {
 }
 
 // NewClient connects to a Cast receiver and starts its inbound message loop.
-func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGroup) (*Client, error) {
+func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGroup) (*ServerConnection, error) {
 	var log = common.NewLogger("client")
 
 	addr := fmt.Sprintf("%s:%d", hostname, port)
@@ -88,7 +88,7 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 
 	castChannel := transport.NewCastChannel(conn, log)
 
-	client := Client{
+	client := ServerConnection{
 		castChannel:     castChannel,
 		conn:            conn,
 		peerCertificate: connectionState.PeerCertificates[0].Raw,
@@ -159,7 +159,7 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 	return &client, nil
 }
 
-func (client *Client) SendMessage(castMessage *channel.CastMessage) {
+func (client *ServerConnection) SendMessage(castMessage *channel.CastMessage) {
 	if castMessage == nil {
 		return
 	}
@@ -179,6 +179,6 @@ func (client *Client) SendMessage(castMessage *channel.CastMessage) {
 	client.castChannel.Send(castMessage)
 }
 
-func (client *Client) Close() error {
+func (client *ServerConnection) Close() error {
 	return client.conn.Close()
 }

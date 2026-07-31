@@ -92,12 +92,12 @@ type errorMessage struct {
 	Reason string `json:"reason"`
 }
 
-// Sender wraps a Client and implements the Cast sender protocol:
+// Sender wraps a ServerConnection and implements the Cast sender protocol:
 // connecting and authenticating to a receiver, sending CONNECT, GET_STATUS,
 // LAUNCH and app namespace messages, and tracking the receiver's reported
 // status, running sessions, transport IDs and errors.
 type Sender struct {
-	client *Client
+	client *ServerConnection
 	log    hclog.Logger
 
 	senderID   string
@@ -115,7 +115,7 @@ type Sender struct {
 
 // NewSender creates a Sender that drives the given client and starts consuming
 // incoming messages to track receiver state.
-func NewSender(client *Client, log hclog.Logger) *Sender {
+func NewSender(client *ServerConnection, log hclog.Logger) *Sender {
 	if log == nil {
 		log = common.NewLogger("sender")
 	}

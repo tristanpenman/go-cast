@@ -41,7 +41,7 @@ type App struct {
 	discover func(time.Duration) ([]discovery.Device, error)
 
 	mu         sync.Mutex
-	castClient *client.Client
+	connection *client.ServerConnection
 	sender     *client.Sender
 }
 
@@ -70,7 +70,7 @@ func (a *App) SelectDevice(device discovery.Device) ([]DeviceApp, error) {
 	}
 
 	sender := client.NewSender(castClient, nil)
-	a.castClient = castClient
+	a.connection = castClient
 	a.sender = sender
 
 	sender.Connect()
@@ -198,10 +198,10 @@ func (a *App) shutdown(context.Context) {
 }
 
 func (a *App) closeLocked() {
-	if a.castClient != nil {
-		_ = a.castClient.Close()
+	if a.connection != nil {
+		_ = a.connection.Close()
 	}
-	a.castClient = nil
+	a.connection = nil
 	a.sender = nil
 }
 
