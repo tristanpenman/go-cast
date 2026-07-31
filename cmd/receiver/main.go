@@ -312,7 +312,7 @@ func main() {
 	var fixNewlines = flag.Bool("fix-newlines", false, "fix newline characters in manifest file")
 	var friendlyName = flag.String("friendly-name", "GoCast Receiver", "friendly name")
 	var headless = flag.Bool("headless", false, "run without UI and log stats")
-	var iface = flag.String("iface", "", "interface to listen on (optional)")
+	var iface = flag.String("iface", "", "network interface name or local address to listen on (optional)")
 	var jpegOutput = flag.Bool("jpeg-output", false, "write each frame to tmp/{frameNum}.jpeg")
 	var port = flag.Int("port", 8009, "port to listen on")
 
@@ -369,7 +369,7 @@ func main() {
 
 	var advertisement *server.Advertisement
 	if *enableMdns {
-		advertisement, err = server.NewAdvertisement(device, *port)
+		advertisement, err = server.NewAdvertisement(device, *port, castServer.InterfaceNames())
 		if err != nil {
 			log.Error("failed to advertise receiver", "err", err)
 		} else {

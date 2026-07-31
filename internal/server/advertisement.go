@@ -28,30 +28,12 @@ func (advertisement *Advertisement) Stop() {
 }
 
 // NewAdvertisement starts advertising a Cast device over mDNS.
-func NewAdvertisement(device *Device, port int) (*Advertisement, error) {
+func NewAdvertisement(device *Device, port int, interfaceNames []string) (*Advertisement, error) {
 	var log = common.NewLogger("advertisement")
 
 	log.Info("starting mdns...")
 
-	info := map[string]string{
-		"ve": "02",
-		"st": "0",
-		"nf": "1",
-		"ca": "4101",
-		"ic": "/setup/icon.png",
-		"md": device.DeviceModel,
-		"id": device.Id,
-		"fn": device.FriendlyName,
-	}
-
-	cfg := dnssd.Config{
-		Name:   "GoCast",
-		Type:   "_googlecast._tcp",
-		Domain: "local",
-		Host:   "",
-		Port:   port,
-		Text:   info,
-	}
+	cfg := advertisementConfig(device, port, interfaceNames)
 
 	service, err := dnssd.NewService(cfg)
 	if err != nil {
@@ -68,7 +50,7 @@ func NewAdvertisement(device *Device, port int) (*Advertisement, error) {
 		return nil, fmt.Errorf("add discovery service: %w", err)
 	}
 
-	log.Info("starting")
+	log.Info("starting", "interfaces", interfaceNames)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -86,4 +68,27 @@ func NewAdvertisement(device *Device, port int) (*Advertisement, error) {
 		done:   done,
 		log:    log,
 	}, nil
+}
+
+func advertisementConfig(device *Device, port int, interfaceNames []string) dnssd.Config {
+	info := map[string]string{
+		"ve": "02",
+		"st": "0",
+		"nf": "1",
+		"ca": "4101",
+		"ic": "/setup/icon.png",
+		"md": device.DeviceModel,
+		"id": device.Id,
+		"fn": device.FriendlyName,
+	}
+
+	return dnssd.Config{
+		Name:   "GoCast",
+		Type:   "_googlecast._tcp",
+		Domain: "local",
+		Host:   "",
+		Port:   port,
+		Text:   info,
+		Ifaces: append([]string(nil), interfaceNames...),
+	}
 }

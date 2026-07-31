@@ -32,6 +32,8 @@ go run ./cmd/receiver --cert-manifest=<path>
 
 The receiver persists its generated device UUID in `config.json` in the current working directory and reuses it on subsequent starts. To provide an identity explicitly instead, use `--device-id=<uuid>`; this overrides the configuration file without modifying it.
 
+Use `--iface=<name-or-address>` to bind the Cast listener to one network interface. The receiver advertises its mDNS service only on the interface that owns the listener address.
+
 Or to build an executable in `./bin/receiver`:
 
 ```sh
