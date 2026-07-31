@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,22 @@ import (
 	"github.com/tristanpenman/go-cast/internal/channel"
 	"github.com/tristanpenman/go-cast/internal/common"
 )
+
+func TestLaunchRequestIncludesSupportedAppTypes(t *testing.T) {
+	request := launchRequest{
+		requestMessage:    requestMessage{RequestID: 7, Type: "LAUNCH"},
+		AppID:             "233637DE",
+		SupportedAppTypes: []string{"ANDROID_TV"},
+	}
+	payload, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"requestId":7,"type":"LAUNCH","appId":"233637DE","supportedAppTypes":["ANDROID_TV"]}`
+	if string(payload) != want {
+		t.Fatalf("unexpected launch request: %s", payload)
+	}
+}
 
 func TestHandleReceiverAppAvailability(t *testing.T) {
 	sender := testSender()
@@ -41,16 +58,16 @@ func TestHandleReceiverStatusIncludesSessionID(t *testing.T) {
 	}
 }
 
-func TestNativeYouTubeMatchesUniversalAppID(t *testing.T) {
+func TestNativeYouTubePreservesUniversalAppID(t *testing.T) {
 	sender := testSender()
 	payload := `{"requestId":2,"responseType":"RECEIVER_STATUS","status":{"applications":[{"appId":"2C6A6E3D","appType":"ANDROID_TV","displayName":"YouTube","universalAppId":"233637DE","sessionId":"session-1","transportId":"transport-1"}]}}`
 	sender.handleReceiverMessage(receiverMessage(payload))
 
-	if transportID := sender.SessionTransportID("233637DE"); transportID != "transport-1" {
-		t.Fatalf("universal YouTube ID returned transport ID %q", transportID)
+	if transportID := sender.SessionTransportID("2C6A6E3D"); transportID != "transport-1" {
+		t.Fatalf("native YouTube ID returned transport ID %q", transportID)
 	}
 	status := sender.Status()
-	if status == nil || len(status.Applications) != 1 || status.Applications[0].AppType != "ANDROID_TV" {
+	if status == nil || len(status.Applications) != 1 || status.Applications[0].AppType != "ANDROID_TV" || status.Applications[0].UniversalAppID != "233637DE" {
 		t.Fatalf("unexpected native YouTube status: %+v", status)
 	}
 }

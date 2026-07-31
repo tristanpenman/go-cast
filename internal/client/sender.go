@@ -35,7 +35,7 @@ type Application struct {
 }
 
 func (a Application) MatchesAppID(appID string) bool {
-	return a.AppID == appID || a.UniversalAppID == appID
+	return a.AppID == appID
 }
 
 // ReceiverStatus is the most recent status reported by the receiver.
@@ -59,7 +59,8 @@ func (m requestMessage) messageType() string {
 
 type launchRequest struct {
 	requestMessage
-	AppID string `json:"appId"`
+	AppID             string   `json:"appId"`
+	SupportedAppTypes []string `json:"supportedAppTypes,omitempty"`
 }
 
 type stopRequest struct {
@@ -188,10 +189,22 @@ func (s *Sender) RequestAppAvailability(appIDs []string) {
 
 // LaunchApp sends a LAUNCH message asking the receiver to start an app.
 func (s *Sender) LaunchApp(appID string) {
+	s.launchApp(appID, nil)
+}
+
+// LaunchAppWithSupportedTypes launches a universal receiver while declaring
+// which receiver implementations the sender supports (for example,
+// ANDROID_TV for a Cast Connect receiver).
+func (s *Sender) LaunchAppWithSupportedTypes(appID string, supportedAppTypes ...string) {
+	s.launchApp(appID, supportedAppTypes)
+}
+
+func (s *Sender) launchApp(appID string, supportedAppTypes []string) {
 	s.clearError()
 	request := launchRequest{
-		requestMessage: requestMessage{RequestID: s.nextRequestID(), Type: "LAUNCH"},
-		AppID:          appID,
+		requestMessage:    requestMessage{RequestID: s.nextRequestID(), Type: "LAUNCH"},
+		AppID:             appID,
+		SupportedAppTypes: supportedAppTypes,
 	}
 	payloadBytes, _ := json.Marshal(request)
 	s.client.SendMessage(newUTF8CastMessage(common.ReceiverNamespace, s.senderID, s.receiverID, string(payloadBytes)))

@@ -103,7 +103,11 @@ func main() {
 	}
 
 	if transportID == "" {
-		s.LaunchApp(effectiveAppID)
+		if effectiveAppID == youtubeAndroidTVAppID {
+			s.LaunchAppWithSupportedTypes(youtubeAppID, "ANDROID_TV")
+		} else {
+			s.LaunchApp(effectiveAppID)
+		}
 		if youtubeVideoID != "" {
 			transportID, err = s.WaitForAppTransport(effectiveAppID, 30*time.Second)
 		} else {

@@ -17,13 +17,13 @@ const youtubeAppID = "233637DE"
 const youtubeAndroidTVAppID = "2C6A6E3D"
 
 type knownApplication struct {
-	ID      string
-	Name    string
-	Aliases []string
+	ID   string
+	Name string
 }
 
 var knownApplications = []knownApplication{
-	{ID: youtubeAppID, Name: "YouTube", Aliases: []string{youtubeAndroidTVAppID}},
+	{ID: youtubeAppID, Name: "YouTube"},
+	{ID: youtubeAndroidTVAppID, Name: "YouTube (Android)"},
 	{ID: "0F5096E8", Name: "Chrome mirroring"},
 	{ID: "674A0243", Name: "Android mirroring"},
 }
@@ -74,10 +74,9 @@ func (a *App) SelectDevice(device discovery.Device) ([]DeviceApp, error) {
 	a.sender = sender
 
 	sender.Connect()
-	appIDs := make([]string, 0, len(knownApplications)+1)
+	appIDs := make([]string, 0, len(knownApplications))
 	for _, app := range knownApplications {
 		appIDs = append(appIDs, app.ID)
-		appIDs = append(appIDs, app.Aliases...)
 	}
 	sender.RequestAppAvailability(appIDs)
 	sender.RequestStatus()
@@ -107,7 +106,7 @@ func (a *App) LaunchApp(appID string) ([]DeviceApp, error) {
 		return nil, fmt.Errorf("app %s is not available on this device", appID)
 	}
 
-	a.sender.LaunchApp(launchAppID)
+	launchReceiverApp(a.sender, launchAppID)
 	if _, err := a.sender.WaitForApp(launchAppID, receiverTimeout); err != nil {
 		return nil, fmt.Errorf("launch app: %w", err)
 	}
@@ -116,7 +115,7 @@ func (a *App) LaunchApp(appID string) ([]DeviceApp, error) {
 
 // PlayYouTube launches YouTube if needed, connects to its application
 // transport, and asks it to play the supplied video URL.
-func (a *App) PlayYouTube(rawURL string) ([]DeviceApp, error) {
+func (a *App) PlayYouTube(appID, rawURL string) ([]DeviceApp, error) {
 	videoID, err := castclient.ParseYouTubeVideoID(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid YouTube URL: %w", err)
@@ -127,19 +126,19 @@ func (a *App) PlayYouTube(rawURL string) ([]DeviceApp, error) {
 	if a.sender == nil {
 		return nil, fmt.Errorf("no device selected")
 	}
+	if appID != youtubeAppID && appID != youtubeAndroidTVAppID {
+		return nil, fmt.Errorf("app %s is not a supported YouTube receiver", appID)
+	}
 
 	// A ready-to-cast YouTube session may be marked as idle while retaining a
 	// usable app transport. Reuse that transport instead of launching again.
-	transportID := a.sender.SessionTransportID(youtubeAndroidTVAppID)
+	transportID := a.sender.SessionTransportID(appID)
 	if transportID == "" {
-		transportID = a.sender.SessionTransportID(youtubeAppID)
-	}
-	if transportID == "" {
-		launchAppID := preferredLaunchAppID(youtubeAppID, a.sender.Availability())
+		launchAppID := preferredLaunchAppID(appID, a.sender.Availability())
 		if launchAppID == "" {
 			return nil, fmt.Errorf("YouTube is not available on this device")
 		}
-		a.sender.LaunchApp(launchAppID)
+		launchReceiverApp(a.sender, launchAppID)
 		// Some receivers take longer than the general control timeout to cold
 		// start YouTube. Requesting status also covers devices that don't send an
 		// unsolicited status update immediately after LAUNCH.
@@ -256,55 +255,42 @@ func deviceApps(availability map[string]string, status *castclient.ReceiverStatu
 }
 
 func preferredLaunchAppID(appID string, availability map[string]string) string {
-	for _, known := range knownApplications {
-		if known.ID != appID {
-			continue
-		}
-		// Prefer a platform-specific receiver, such as YouTube's Cast Connect
-		// Android TV app, over its universal web receiver.
-		for _, alias := range known.Aliases {
-			if availability[alias] == "APP_AVAILABLE" {
-				return alias
-			}
-		}
-	}
 	if availability[appID] == "APP_AVAILABLE" {
 		return appID
 	}
 	return ""
 }
 
+func launchReceiverApp(sender *castclient.Sender, appID string) {
+	requestAppID, supportedAppTypes := launchRequestForApp(appID)
+	if len(supportedAppTypes) == 0 {
+		sender.LaunchApp(requestAppID)
+		return
+	}
+	sender.LaunchAppWithSupportedTypes(requestAppID, supportedAppTypes...)
+}
+
+func launchRequestForApp(appID string) (string, []string) {
+	if appID == youtubeAndroidTVAppID {
+		// 2C6A6E3D identifies the running Android TV implementation. Cast
+		// Connect requires launches to use the universal receiver ID while
+		// declaring that this sender supports the Android TV receiver.
+		return youtubeAppID, []string{"ANDROID_TV"}
+	}
+	return appID, nil
+}
+
 func knownApplicationAvailable(known knownApplication, availability map[string]string) bool {
-	if availability[known.ID] == "APP_AVAILABLE" {
-		return true
-	}
-	for _, alias := range known.Aliases {
-		if availability[alias] == "APP_AVAILABLE" {
-			return true
-		}
-	}
-	return false
+	return availability[known.ID] == "APP_AVAILABLE"
 }
 
 func runningKnownApplication(running map[string]castclient.Application, known knownApplication) (castclient.Application, bool) {
-	for _, app := range running {
-		if applicationMatchesKnown(app, known) {
-			return app, true
-		}
-	}
-	return castclient.Application{}, false
+	app, ok := running[known.ID]
+	return app, ok
 }
 
 func applicationMatchesKnown(app castclient.Application, known knownApplication) bool {
-	if app.MatchesAppID(known.ID) {
-		return true
-	}
-	for _, alias := range known.Aliases {
-		if app.MatchesAppID(alias) {
-			return true
-		}
-	}
-	return false
+	return app.AppID == known.ID
 }
 
 func applicationMatchesKnownID(app castclient.Application, appID string) bool {

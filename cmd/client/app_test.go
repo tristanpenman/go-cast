@@ -77,7 +77,7 @@ func TestDeviceAppsDoesNotMarkIdleScreenAsRunning(t *testing.T) {
 	}
 }
 
-func TestDeviceAppsTreatsAndroidTVYouTubeAsUniversalYouTube(t *testing.T) {
+func TestDeviceAppsListsBothYouTubeReceivers(t *testing.T) {
 	availability := map[string]string{
 		"233637DE": "APP_AVAILABLE",
 		"2C6A6E3D": "APP_AVAILABLE",
@@ -94,23 +94,36 @@ func TestDeviceAppsTreatsAndroidTVYouTubeAsUniversalYouTube(t *testing.T) {
 	}}
 
 	got := deviceApps(availability, status)
-	if len(got) != 1 {
-		t.Fatalf("expected one canonical YouTube app, got %+v", got)
+	if len(got) != 2 {
+		t.Fatalf("expected both YouTube apps, got %+v", got)
 	}
-	if got[0].ID != youtubeAppID || !got[0].Running || got[0].StatusText != "Playing" {
-		t.Fatalf("unexpected YouTube app: %+v", got[0])
+	if got[0].ID != youtubeAppID || got[0].Running || got[0].Name != "YouTube" {
+		t.Fatalf("unexpected web YouTube app: %+v", got[0])
 	}
-	if launchID := preferredLaunchAppID(youtubeAppID, availability); launchID != youtubeAndroidTVAppID {
-		t.Fatalf("expected native YouTube launch ID, got %q", launchID)
+	if got[1].ID != youtubeAndroidTVAppID || !got[1].Running || got[1].Name != "YouTube (Android)" || got[1].StatusText != "Playing" {
+		t.Fatalf("unexpected Android YouTube app: %+v", got[1])
+	}
+	if launchID := preferredLaunchAppID(youtubeAppID, availability); launchID != youtubeAppID {
+		t.Fatalf("expected web YouTube launch ID, got %q", launchID)
 	}
 }
 
 func TestPlayYouTubeValidatesURLBeforeConnecting(t *testing.T) {
 	app := &App{}
-	if _, err := app.PlayYouTube("https://example.com/video"); err == nil {
+	if _, err := app.PlayYouTube(youtubeAppID, "https://example.com/video"); err == nil {
 		t.Fatal("expected unsupported YouTube URL to fail")
 	}
-	if _, err := app.PlayYouTube("https://youtu.be/dQw4w9WgXcQ"); err == nil || err.Error() != "no device selected" {
+	if _, err := app.PlayYouTube(youtubeAndroidTVAppID, "https://youtu.be/dQw4w9WgXcQ"); err == nil || err.Error() != "no device selected" {
 		t.Fatalf("expected no-device error for a valid URL, got %v", err)
+	}
+}
+
+func TestAndroidYouTubeLaunchUsesCastConnectRequest(t *testing.T) {
+	appID, supportedAppTypes := launchRequestForApp(youtubeAndroidTVAppID)
+	if appID != youtubeAppID {
+		t.Fatalf("expected universal YouTube app ID, got %q", appID)
+	}
+	if len(supportedAppTypes) != 1 || supportedAppTypes[0] != "ANDROID_TV" {
+		t.Fatalf("unexpected supported app types: %v", supportedAppTypes)
 	}
 }

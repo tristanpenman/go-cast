@@ -83,7 +83,7 @@ function renderAppControls() {
     return;
   }
 
-  const isYouTube = app.id === "233637DE";
+  const isYouTube = app.id === "233637DE" || app.id === "2C6A6E3D";
   const youtubeControls = isYouTube ? `
     <form id="youtube-form" class="youtube-controls">
       <label for="youtube-url">YouTube video URL</label>
@@ -172,7 +172,7 @@ async function playYouTube(form) {
   controlStatus.className = "status scanning";
   controlStatus.textContent = "Sending video to YouTube…";
   try {
-    const found = await window.go.main.App.PlayYouTube(url);
+    const found = await window.go.main.App.PlayYouTube(selectedAppID, url);
     renderApps(found);
     controlStatus.className = "status";
     controlStatus.textContent = "Video sent to YouTube";
