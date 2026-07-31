@@ -27,8 +27,10 @@ The `receiver` app will start a Google Cast receiver, which can then be cast to 
 To run the receiver in your local dev environment:
 
 ```sh
-go run cmd/receiver/*.go --cert-manifest=<path>
+go run ./cmd/receiver --cert-manifest=<path>
 ```
+
+The receiver persists its generated device UUID in `config.json` in the current working directory and reuses it on subsequent starts. To provide an identity explicitly instead, use `--device-id=<uuid>`; this overrides the configuration file without modifying it.
 
 Or to build an executable in `./bin/receiver`:
 
@@ -88,8 +90,7 @@ cd cmd/client
 wails dev
 ```
 
-The frontend is dependency-free and its static assets are embedded in the Go
-binary, so no Node.js install or frontend build step is required.
+The frontend is dependency-free and its static assets are embedded in the Go binary, so no Node.js install or frontend build step is required.
 
 ## Cert Manifests
 

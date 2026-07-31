@@ -21,7 +21,6 @@ import (
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
-	"github.com/google/uuid"
 	_ "golang.org/x/image/font"
 
 	// internal
@@ -307,6 +306,7 @@ func main() {
 	// general options
 	var assetsDir = flag.String("assets-dir", "assets", "path to assets directory (fonts and backdrop)")
 	var clientPrefix = flag.String("client-prefix", "", "optional client prefix, to limit connections")
+	var deviceID = flag.String("device-id", "", "stable receiver UUID; overrides config.json")
 	var deviceModel = flag.String("device-model", "go-cast", "device model")
 	var enableMdns = flag.Bool("enable-mdns", false, "advertise service using mDNS")
 	var fixNewlines = flag.Bool("fix-newlines", false, "fix newline characters in manifest file")
@@ -329,6 +329,7 @@ func main() {
 		"cert-service", *certService,
 		"cert-service-salt", *certServiceSalt,
 		"client-prefix", *clientPrefix,
+		"device-id", *deviceID,
 		"device-model", *deviceModel,
 		"enable-mdns", *enableMdns,
 		"fix-newlines", *fixNewlines,
@@ -345,8 +346,13 @@ func main() {
 		return
 	}
 
+	id, err := resolveDeviceID(*deviceID, receiverConfigPath)
+	if err != nil {
+		log.Error("failed to resolve device ID", "err", err)
+		return
+	}
+
 	images := make(chan *image.RGBA)
-	id := uuid.New().String()
 	udn := id
 	device := server.NewDevice(images, *deviceModel, *friendlyName, id, *jpegOutput, udn)
 
