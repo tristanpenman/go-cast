@@ -179,7 +179,7 @@ func youtubeLoungeSetPlaylist(ctx context.Context, httpClient *http.Client, base
 	params := url.Values{
 		"SID": {sid}, "gsessionid": {gsessionID}, "RID": {"1"}, "VER": {"8"}, "CVER": {"1"},
 		"v": {"2"}, "TYPE": {"bind"}, "t": {"1"}, "AID": {"0"}, "CI": {"0"},
-		"name": {"GoCast"}, "id": {"aaaaaaaaaaaaaaaaaaaaaaaaaa"}, "device": {"REMOTE_CONTROL"},
+		"name": {"GoCast Remote"}, "id": {"aaaaaaaaaaaaaaaaaaaaaaaaaa"}, "device": {"REMOTE_CONTROL"},
 		"loungeIdToken": {loungeToken},
 	}
 	form := url.Values{
@@ -214,7 +214,7 @@ func youtubeLoungeSetPlaylist(ctx context.Context, httpClient *http.Client, base
 
 func youtubeBindData(loungeToken string) url.Values {
 	return url.Values{
-		"app": {"web"}, "mdx-version": {"3"}, "name": {"GoCast"},
+		"app": {"web"}, "mdx-version": {"3"}, "name": {"GoCast Remote"},
 		"id": {"aaaaaaaaaaaaaaaaaaaaaaaaaa"}, "device": {"REMOTE_CONTROL"},
 		"capabilities": {"que,dsdtr,atp"}, "method": {"setPlaylist"},
 		"magnaKey": {"cloudPairedDevice"}, "ui": {"false"}, "theme": {"cl"},

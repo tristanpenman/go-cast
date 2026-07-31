@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	castclient "github.com/tristanpenman/go-cast/internal/client"
+	"github.com/tristanpenman/go-cast/internal/client"
 	"github.com/tristanpenman/go-cast/internal/discovery"
 )
 
@@ -42,7 +42,7 @@ func TestDeviceAppsMergesAvailabilityAndRunningStatus(t *testing.T) {
 		"0F5096E8": "APP_UNAVAILABLE",
 		"674A0243": "APP_AVAILABLE",
 	}
-	status := &castclient.ReceiverStatus{Applications: []castclient.Application{
+	status := &client.ReceiverStatus{Applications: []client.Application{
 		{AppID: "233637DE", DisplayName: "YouTube", SessionID: "session-1", StatusText: "Playing"},
 		{AppID: "CUSTOM", DisplayName: "Custom receiver", SessionID: "session-2"},
 	}}
@@ -64,7 +64,7 @@ func TestDeviceAppsMergesAvailabilityAndRunningStatus(t *testing.T) {
 
 func TestDeviceAppsDoesNotMarkIdleScreenAsRunning(t *testing.T) {
 	availability := map[string]string{"233637DE": "APP_AVAILABLE"}
-	status := &castclient.ReceiverStatus{Applications: []castclient.Application{
+	status := &client.ReceiverStatus{Applications: []client.Application{
 		{AppID: "233637DE", DisplayName: "YouTube", IsIdleScreen: true, SessionID: "idle-session"},
 	}}
 
@@ -82,7 +82,7 @@ func TestDeviceAppsListsBothYouTubeReceivers(t *testing.T) {
 		"233637DE": "APP_AVAILABLE",
 		"2C6A6E3D": "APP_AVAILABLE",
 	}
-	status := &castclient.ReceiverStatus{Applications: []castclient.Application{
+	status := &client.ReceiverStatus{Applications: []client.Application{
 		{
 			AppID:          "2C6A6E3D",
 			AppType:        "ANDROID_TV",

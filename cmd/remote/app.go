@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	castclient "github.com/tristanpenman/go-cast/internal/client"
+	"github.com/tristanpenman/go-cast/internal/client"
 	"github.com/tristanpenman/go-cast/internal/discovery"
 )
 
@@ -41,8 +41,8 @@ type App struct {
 	discover func(time.Duration) ([]discovery.Device, error)
 
 	mu         sync.Mutex
-	castClient *castclient.Client
-	sender     *castclient.Sender
+	castClient *client.Client
+	sender     *client.Sender
 }
 
 func NewApp() *App {
@@ -64,12 +64,12 @@ func (a *App) SelectDevice(device discovery.Device) ([]DeviceApp, error) {
 	}
 
 	a.closeLocked()
-	castClient, err := castclient.NewClient(device.Host, uint(device.Port), true, nil)
+	castClient, err := client.NewClient(device.Host, uint(device.Port), true, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	sender := castclient.NewSender(castClient, nil)
+	sender := client.NewSender(castClient, nil)
 	a.castClient = castClient
 	a.sender = sender
 
@@ -116,7 +116,7 @@ func (a *App) LaunchApp(appID string) ([]DeviceApp, error) {
 // PlayYouTube launches YouTube if needed, connects to its application
 // transport, and asks it to play the supplied video URL.
 func (a *App) PlayYouTube(appID, rawURL string) ([]DeviceApp, error) {
-	videoID, err := castclient.ParseYouTubeVideoID(rawURL)
+	videoID, err := client.ParseYouTubeVideoID(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid YouTube URL: %w", err)
 	}
@@ -154,7 +154,7 @@ func (a *App) PlayYouTube(appID, rawURL string) ([]DeviceApp, error) {
 	if err != nil {
 		return nil, fmt.Errorf("query YouTube screen: %w", err)
 	}
-	if err := castclient.PlayYouTubeViaLounge(context.Background(), screenID, videoID); err != nil {
+	if err := client.PlayYouTubeViaLounge(context.Background(), screenID, videoID); err != nil {
 		return nil, fmt.Errorf("start YouTube playback: %w", err)
 	}
 	return deviceApps(a.sender.Availability(), a.sender.Status()), nil
@@ -205,8 +205,8 @@ func (a *App) closeLocked() {
 	a.sender = nil
 }
 
-func deviceApps(availability map[string]string, status *castclient.ReceiverStatus) []DeviceApp {
-	running := make(map[string]castclient.Application)
+func deviceApps(availability map[string]string, status *client.ReceiverStatus) []DeviceApp {
+	running := make(map[string]client.Application)
 	if status != nil {
 		for _, app := range status.Applications {
 			if app.IsIdleScreen {
@@ -261,7 +261,7 @@ func preferredLaunchAppID(appID string, availability map[string]string) string {
 	return ""
 }
 
-func launchReceiverApp(sender *castclient.Sender, appID string) {
+func launchReceiverApp(sender *client.Sender, appID string) {
 	requestAppID, supportedAppTypes := launchRequestForApp(appID)
 	if len(supportedAppTypes) == 0 {
 		sender.LaunchApp(requestAppID)
@@ -284,16 +284,16 @@ func knownApplicationAvailable(known knownApplication, availability map[string]s
 	return availability[known.ID] == "APP_AVAILABLE"
 }
 
-func runningKnownApplication(running map[string]castclient.Application, known knownApplication) (castclient.Application, bool) {
+func runningKnownApplication(running map[string]client.Application, known knownApplication) (client.Application, bool) {
 	app, ok := running[known.ID]
 	return app, ok
 }
 
-func applicationMatchesKnown(app castclient.Application, known knownApplication) bool {
+func applicationMatchesKnown(app client.Application, known knownApplication) bool {
 	return app.AppID == known.ID
 }
 
-func applicationMatchesKnownID(app castclient.Application, appID string) bool {
+func applicationMatchesKnownID(app client.Application, appID string) bool {
 	for _, known := range knownApplications {
 		if known.ID == appID {
 			return applicationMatchesKnown(app, known)

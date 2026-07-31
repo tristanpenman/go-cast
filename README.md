@@ -1,6 +1,6 @@
 # GoCast
 
-This project is intended to offer a complete implementation of the [Google Cast](https://en.wikipedia.org/wiki/Google_Cast) protocol, written in Go, with custom Sender and Receiver apps using GLFW for the frontend.
+This project is intended to offer a complete implementation of the [Google Cast](https://en.wikipedia.org/wiki/Google_Cast) protocol, written in Go, with custom GoCast Remote and Receiver apps.
 
 GoCast currently supports streams using VP8, with H.264 support on the roadmap. Audio is currently not supported.
 
@@ -11,12 +11,6 @@ The following architecture diagram summarises the overall design of the GoCast R
 ![Receiver Architecture](./doc/receiver-architecture.drawio.png)
 
 In terms of actual code, these concepts are implemented as Go structs.
-
-The Sender architecture is somewhat simpler:
-
-![Sender Architecture](./doc/sender-architecture.drawio.png)
-
-The key difference here is that the sender app does not need to maintain multiple connections, and is designed only to launch a single app.
 
 ## Usage
 
@@ -40,32 +34,6 @@ Or to build an executable in `./bin/receiver`:
 go build -o ./bin/receiver ./cmd/receiver
 ```
 
-### Sender App
-
-To run the sender in your local dev environment:
-
-```sh
-go run cmd/sender/*.go --hostname=<receiver-host> --app-id=<app-id>
-```
-
-To launch the Chromecast mirroring receiver app for a local video file:
-
-```sh
-go run cmd/sender/*.go --hostname=<receiver-host> --video-path=<path-to-video>
-```
-
-To launch the Chromecast YouTube app and play a video URL:
-
-```sh
-go run cmd/sender/*.go --hostname=<receiver-host> --youtube-url=<youtube-video-url>
-```
-
-Or to build an executable in `./bin/sender`:
-
-```sh
-go build -o ./bin/sender ./cmd/sender
-```
-
 ### Discovery App
 
 The `discovery` app allows you to locate Google Cast devices on your network, using mDNS.
@@ -82,13 +50,13 @@ Or to build an executable in `./bin/discovery`:
 go build -o ./bin/discovery ./cmd/discovery
 ```
 
-### Desktop Client
+### GoCast Remote
 
-The Wails desktop client discovers and lists Google Cast devices on the local network. Install the Wails CLI, then run it from the client directory:
+The Wails remote control discovers and lists Google Cast devices on the local network. Install the Wails CLI, then run it from the app directory:
 
 ```sh
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
-cd cmd/client
+cd cmd/remote
 wails dev
 ```
 

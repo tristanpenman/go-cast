@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "GoCast",
-  "outputfilename": "GoCast",
+  "name": "GoCast Remote",
+  "outputfilename": "GoCast Remote",
   "frontend:dir": "frontend",
   "frontend:install": "",
   "frontend:build": "",

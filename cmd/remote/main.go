@@ -15,7 +15,7 @@ var assets embed.FS
 func main() {
 	app := NewApp()
 	err := wails.Run(&options.App{
-		Title:  "GoCast",
+		Title:  "GoCast Remote",
 		Width:  920,
 		Height: 680,
 		AssetServer: &assetserver.Options{
