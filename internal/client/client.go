@@ -103,17 +103,23 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 	go func() {
 		for castMessage := range castChannel.Messages {
 			if castMessage != nil {
-				if log.IsDebug() {
-					if castMessage.PayloadUtf8 != nil {
-						log.Debug("received message", "namespace", castMessage.GetNamespace(), "payload", castMessage.GetPayloadUtf8())
-					} else {
-						log.Debug("received binary message", "namespace", castMessage.GetNamespace(), "bytes", len(castMessage.GetPayloadBinary()))
-					}
+				if castMessage.PayloadUtf8 != nil {
+					log.Info("received message",
+						"namespace", castMessage.GetNamespace(),
+						"source", castMessage.GetSourceId(),
+						"destination", castMessage.GetDestinationId(),
+						"payload", castMessage.GetPayloadUtf8())
 				} else {
-					log.Info("received message", "namespace", *castMessage.Namespace)
+					// Device-auth payloads contain certificates and signatures. Their
+					// size is useful diagnostically; dumping the binary content is not.
+					log.Info("received binary message",
+						"namespace", castMessage.GetNamespace(),
+						"source", castMessage.GetSourceId(),
+						"destination", castMessage.GetDestinationId(),
+						"bytes", len(castMessage.GetPayloadBinary()))
 				}
 
-				if *castMessage.Namespace == common.DeviceAuthNamespace {
+				if castMessage.GetNamespace() == common.DeviceAuthNamespace {
 					err := verifyDeviceAuthResponse(castMessage.PayloadBinary, client.peerCertificate, nil, time.Now())
 					client.completeDeviceAuth(err)
 					continue
@@ -154,6 +160,22 @@ func NewClient(hostname string, port uint, authChallenge bool, wg *sync.WaitGrou
 }
 
 func (client *Client) SendMessage(castMessage *channel.CastMessage) {
+	if castMessage == nil {
+		return
+	}
+	if castMessage.PayloadUtf8 != nil {
+		client.log.Info("sending message",
+			"namespace", castMessage.GetNamespace(),
+			"source", castMessage.GetSourceId(),
+			"destination", castMessage.GetDestinationId(),
+			"payload", castMessage.GetPayloadUtf8())
+	} else {
+		client.log.Info("sending binary message",
+			"namespace", castMessage.GetNamespace(),
+			"source", castMessage.GetSourceId(),
+			"destination", castMessage.GetDestinationId(),
+			"bytes", len(castMessage.GetPayloadBinary()))
+	}
 	client.castChannel.Send(castMessage)
 }
 

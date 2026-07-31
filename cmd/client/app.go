@@ -12,6 +12,7 @@ import (
 )
 
 const receiverTimeout = 10 * time.Second
+const youtubeLaunchTimeout = 30 * time.Second
 const youtubeAppID = "233637DE"
 
 type knownApplication struct {
@@ -123,20 +124,32 @@ func (a *App) PlayYouTube(rawURL string) ([]DeviceApp, error) {
 		return nil, fmt.Errorf("no device selected")
 	}
 
-	transportID := a.sender.TransportID(youtubeAppID)
+	// A ready-to-cast YouTube session may be marked as idle while retaining a
+	// usable app transport. Reuse that transport instead of launching again.
+	transportID := a.sender.SessionTransportID(youtubeAppID)
 	if transportID == "" {
 		if a.sender.Availability()[youtubeAppID] != "APP_AVAILABLE" {
 			return nil, fmt.Errorf("YouTube is not available on this device")
 		}
 		a.sender.LaunchApp(youtubeAppID)
-		transportID, err = a.sender.WaitForApp(youtubeAppID, receiverTimeout)
+		// Some receivers take longer than the general control timeout to cold
+		// start YouTube. Requesting status also covers devices that don't send an
+		// unsolicited status update immediately after LAUNCH.
+		a.sender.RequestStatus()
+		transportID, err = a.sender.WaitForAppTransport(youtubeAppID, youtubeLaunchTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("launch YouTube: %w", err)
 		}
 	}
 
 	a.sender.ConnectTransport(transportID)
-	a.sender.FlingYouTubeVideo(transportID, videoID)
+	screenID, err := a.sender.RequestYouTubeScreenID(transportID, receiverTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("query YouTube screen: %w", err)
+	}
+	if err := castclient.PlayYouTubeViaLounge(context.Background(), screenID, videoID); err != nil {
+		return nil, fmt.Errorf("start YouTube playback: %w", err)
+	}
 	return deviceApps(a.sender.Availability(), a.sender.Status()), nil
 }
 

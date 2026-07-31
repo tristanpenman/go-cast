@@ -1,6 +1,10 @@
 package client
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"testing"
 	"time"
@@ -47,6 +51,71 @@ func TestIdleScreenIsNotTreatedAsRunning(t *testing.T) {
 	}
 	if sender.appRunningLocked("233637DE") {
 		t.Fatal("idle screen was treated as a running app")
+	}
+	if transportID := sender.SessionTransportID("233637DE"); transportID != "idle-transport" {
+		t.Fatalf("idle app session returned transport ID %q", transportID)
+	}
+	transportID, err := sender.WaitForAppTransport("233637DE", time.Second)
+	if err != nil {
+		t.Fatalf("wait for idle app transport: %v", err)
+	}
+	if transportID != "idle-transport" {
+		t.Fatalf("wait returned transport ID %q", transportID)
+	}
+}
+
+func TestHandleYouTubeScreenStatus(t *testing.T) {
+	sender := testSender()
+	payload := `{"type":"mdxSessionStatus","data":{"screenId":"screen-123"}}`
+	namespace := youtubeNamespace
+	sender.handleYouTubeMessage(&channel.CastMessage{Namespace: &namespace, PayloadUtf8: &payload})
+
+	if sender.youtubeScreenID != "screen-123" {
+		t.Fatalf("unexpected YouTube screen ID %q", sender.youtubeScreenID)
+	}
+}
+
+func TestPlayYouTubeViaLounge(t *testing.T) {
+	requestNumber := 0
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		requestNumber++
+		if err := request.ParseForm(); err != nil {
+			t.Errorf("parse form: %v", err)
+			response.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		switch requestNumber {
+		case 1:
+			if request.URL.Path != "/api/lounge/pairing/get_lounge_token_batch" || request.Form.Get("screen_ids") != "screen-123" {
+				t.Errorf("unexpected token request: %s %+v", request.URL.Path, request.Form)
+			}
+			_, _ = fmt.Fprint(response, `{"screens":[{"loungeToken":"lounge-token"}]}`)
+		case 2:
+			if request.URL.Path != "/api/lounge/bc/bind" || request.URL.Query().Get("RID") != "0" {
+				t.Errorf("unexpected bind request: %s %+v", request.URL.Path, request.URL.Query())
+			}
+			if request.Header.Get("X-YouTube-LoungeId-Token") != "lounge-token" || request.Form.Get("device") != "REMOTE_CONTROL" {
+				t.Errorf("unexpected bind headers or form: %+v %+v", request.Header, request.Form)
+			}
+			_, _ = fmt.Fprint(response, `[[0,["c","sid-123","",8]],[1,["S","gsession-123"]]]`)
+		case 3:
+			if request.URL.Query().Get("SID") != "sid-123" || request.URL.Query().Get("gsessionid") != "gsession-123" {
+				t.Errorf("unexpected session request: %+v", request.URL.Query())
+			}
+			if request.Form.Get("req0__sc") != "setPlaylist" || request.Form.Get("req0__videoId") != "video-123" {
+				t.Errorf("unexpected playlist request: %+v", request.Form)
+			}
+		default:
+			t.Errorf("unexpected extra request %d", requestNumber)
+		}
+	}))
+	defer server.Close()
+
+	if err := playYouTubeViaLounge(context.Background(), server.Client(), server.URL, "screen-123", "video-123"); err != nil {
+		t.Fatal(err)
+	}
+	if requestNumber != 3 {
+		t.Fatalf("expected three YouTube requests, got %d", requestNumber)
 	}
 }
 

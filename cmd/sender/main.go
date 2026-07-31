@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"sync"
@@ -101,9 +102,20 @@ func main() {
 	}
 
 	if youtubeVideoID != "" {
-		s.FlingYouTubeVideo(transportID, youtubeVideoID)
+		screenID, err := s.RequestYouTubeScreenID(transportID, 10*time.Second)
+		if err != nil {
+			log.Error("failed to query YouTube screen ID", "err", err)
+			_ = castClient.Close()
+			wg.Wait()
+			return
+		}
+		if err := client.PlayYouTubeViaLounge(context.Background(), screenID, youtubeVideoID); err != nil {
+			log.Error("failed to start YouTube playback", "err", err)
+			_ = castClient.Close()
+			wg.Wait()
+			return
+		}
 		log.Info("youtube video queued", "video-id", youtubeVideoID)
-		time.Sleep(500 * time.Millisecond)
 	}
 
 	_ = castClient.Close()

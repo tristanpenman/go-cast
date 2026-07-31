@@ -96,13 +96,14 @@ type Sender struct {
 	senderID   string
 	receiverID string
 
-	mu           sync.Mutex
-	cond         *sync.Cond
-	requestID    int
-	status       *ReceiverStatus
-	availability map[string]string
-	err          error
-	closed       bool
+	mu              sync.Mutex
+	cond            *sync.Cond
+	requestID       int
+	status          *ReceiverStatus
+	availability    map[string]string
+	youtubeScreenID string
+	err             error
+	closed          bool
 }
 
 // NewSender creates a Sender that drives the given client and starts consuming
@@ -296,6 +297,27 @@ func (s *Sender) transportIDLocked(appID string) string {
 	return ""
 }
 
+// SessionTransportID returns the transport ID for an app session even when the
+// receiver marks that session as an idle screen. This is useful for apps such
+// as YouTube, whose ready-to-cast session is still a valid message transport.
+func (s *Sender) SessionTransportID(appID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sessionTransportIDLocked(appID)
+}
+
+func (s *Sender) sessionTransportIDLocked(appID string) string {
+	if s.status == nil {
+		return ""
+	}
+	for _, app := range s.status.Applications {
+		if app.AppID == appID && app.TransportID != "" {
+			return app.TransportID
+		}
+	}
+	return ""
+}
+
 // Err returns the most recent error reported by the receiver, if any.
 func (s *Sender) Err() error {
 	s.mu.Lock()
@@ -329,6 +351,45 @@ func (s *Sender) WaitForApp(appID string, timeout time.Duration) (string, error)
 		}
 		s.cond.Wait()
 	}
+}
+
+// WaitForAppTransport blocks until the receiver reports a message transport
+// for the app. Unlike WaitForApp, it accepts an idle-marked app session.
+func (s *Sender) WaitForAppTransport(appID string, timeout time.Duration) (string, error) {
+	timer := s.broadcastAtTimeout(timeout)
+	defer timer.Stop()
+
+	deadline := time.Now().Add(timeout)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for {
+		if transportID := s.sessionTransportIDLocked(appID); transportID != "" {
+			return transportID, nil
+		}
+		if s.err != nil {
+			return "", s.err
+		}
+		if s.closed {
+			return "", errors.New("connection closed")
+		}
+		if !time.Now().Before(deadline) {
+			return "", fmt.Errorf("timed out waiting for %s message transport (%s)", appID, s.appSessionStateLocked(appID))
+		}
+		s.cond.Wait()
+	}
+}
+
+func (s *Sender) appSessionStateLocked(appID string) string {
+	if s.status == nil {
+		return "no receiver status received"
+	}
+	for _, app := range s.status.Applications {
+		if app.AppID == appID {
+			return fmt.Sprintf("app reported with idle=%t, sessionId=%q, transportId=%q", app.IsIdleScreen, app.SessionID, app.TransportID)
+		}
+	}
+	return "app not present in receiver status"
 }
 
 // WaitForAppStopped blocks until an app is no longer present in receiver status.
@@ -394,6 +455,8 @@ func (s *Sender) readLoop() {
 			}
 		case common.ReceiverNamespace:
 			s.handleReceiverMessage(castMessage)
+		case youtubeNamespace:
+			s.handleYouTubeMessage(castMessage)
 		}
 	}
 
