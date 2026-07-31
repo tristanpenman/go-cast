@@ -13,6 +13,7 @@ import (
 var assets embed.FS
 
 func main() {
+	app := NewApp()
 	err := wails.Run(&options.App{
 		Title:  "GoCast",
 		Width:  920,
@@ -20,7 +21,8 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		Bind: []interface{}{NewApp()},
+		Bind:       []interface{}{app},
+		OnShutdown: app.shutdown,
 	})
 	if err != nil {
 		fmt.Println("Error:", err)

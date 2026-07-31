@@ -26,6 +26,7 @@ const (
 type Application struct {
 	AppID       string `json:"appId"`
 	DisplayName string `json:"displayName"`
+	SessionID   string `json:"sessionId"`
 	StatusText  string `json:"statusText"`
 	TransportID string `json:"transportId"`
 }
@@ -37,13 +38,36 @@ type ReceiverStatus struct {
 
 // requestMessage is the common envelope shared by receiver control messages.
 type requestMessage struct {
-	RequestID int    `json:"requestId"`
-	Type      string `json:"type"`
+	RequestID    int    `json:"requestId"`
+	Type         string `json:"type,omitempty"`
+	ResponseType string `json:"responseType,omitempty"`
+}
+
+func (m requestMessage) messageType() string {
+	if m.Type != "" {
+		return m.Type
+	}
+	return m.ResponseType
 }
 
 type launchRequest struct {
 	requestMessage
 	AppID string `json:"appId"`
+}
+
+type stopRequest struct {
+	requestMessage
+	SessionID string `json:"sessionId"`
+}
+
+type appAvailabilityRequest struct {
+	requestMessage
+	AppIDs []string `json:"appId"`
+}
+
+type appAvailabilityMessage struct {
+	requestMessage
+	Availability map[string]string `json:"availability"`
 }
 
 type statusPayload struct {
@@ -71,12 +95,13 @@ type Sender struct {
 	senderID   string
 	receiverID string
 
-	mu        sync.Mutex
-	cond      *sync.Cond
-	requestID int
-	status    *ReceiverStatus
-	err       error
-	closed    bool
+	mu           sync.Mutex
+	cond         *sync.Cond
+	requestID    int
+	status       *ReceiverStatus
+	availability map[string]string
+	err          error
+	closed       bool
 }
 
 // NewSender creates a Sender that drives the given client and starts consuming
@@ -143,11 +168,33 @@ func (s *Sender) RequestStatus() {
 	s.client.SendMessage(newUTF8CastMessage(common.ReceiverNamespace, s.senderID, s.receiverID, string(payloadBytes)))
 }
 
+// RequestAppAvailability asks whether the receiver can launch the supplied app IDs.
+func (s *Sender) RequestAppAvailability(appIDs []string) {
+	request := appAvailabilityRequest{
+		requestMessage: requestMessage{RequestID: s.nextRequestID(), Type: "GET_APP_AVAILABILITY"},
+		AppIDs:         appIDs,
+	}
+	payloadBytes, _ := json.Marshal(request)
+	s.client.SendMessage(newUTF8CastMessage(common.ReceiverNamespace, s.senderID, s.receiverID, string(payloadBytes)))
+}
+
 // LaunchApp sends a LAUNCH message asking the receiver to start an app.
 func (s *Sender) LaunchApp(appID string) {
+	s.clearError()
 	request := launchRequest{
 		requestMessage: requestMessage{RequestID: s.nextRequestID(), Type: "LAUNCH"},
 		AppID:          appID,
+	}
+	payloadBytes, _ := json.Marshal(request)
+	s.client.SendMessage(newUTF8CastMessage(common.ReceiverNamespace, s.senderID, s.receiverID, string(payloadBytes)))
+}
+
+// StopApp asks the receiver to terminate an application session.
+func (s *Sender) StopApp(sessionID string) {
+	s.clearError()
+	request := stopRequest{
+		requestMessage: requestMessage{RequestID: s.nextRequestID(), Type: "STOP"},
+		SessionID:      sessionID,
 	}
 	payloadBytes, _ := json.Marshal(request)
 	s.client.SendMessage(newUTF8CastMessage(common.ReceiverNamespace, s.senderID, s.receiverID, string(payloadBytes)))
@@ -165,6 +212,58 @@ func (s *Sender) Status() *ReceiverStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.statusLocked()
+}
+
+// Availability returns the most recently reported app availability map.
+func (s *Sender) Availability() map[string]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.availability == nil {
+		return nil
+	}
+	result := make(map[string]string, len(s.availability))
+	for appID, value := range s.availability {
+		result[appID] = value
+	}
+	return result
+}
+
+// WaitForStatus blocks until the receiver has reported its status.
+func (s *Sender) WaitForStatus(timeout time.Duration) (*ReceiverStatus, error) {
+	deadline := time.Now().Add(timeout)
+	timer := s.broadcastAtTimeout(timeout)
+	defer timer.Stop()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for s.status == nil {
+		if err := s.waitErrorLocked(deadline, "receiver status"); err != nil {
+			return nil, err
+		}
+		s.cond.Wait()
+	}
+	return s.statusLocked(), nil
+}
+
+// WaitForAvailability blocks until the receiver answers an app availability query.
+func (s *Sender) WaitForAvailability(timeout time.Duration) (map[string]string, error) {
+	deadline := time.Now().Add(timeout)
+	timer := s.broadcastAtTimeout(timeout)
+	defer timer.Stop()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for s.availability == nil {
+		if err := s.waitErrorLocked(deadline, "app availability"); err != nil {
+			return nil, err
+		}
+		s.cond.Wait()
+	}
+	result := make(map[string]string, len(s.availability))
+	for appID, value := range s.availability {
+		result[appID] = value
+	}
+	return result, nil
 }
 
 func (s *Sender) statusLocked() *ReceiverStatus {
@@ -207,11 +306,7 @@ func (s *Sender) Err() error {
 // returns its transport ID, or fails on timeout, receiver error, or a closed
 // connection.
 func (s *Sender) WaitForApp(appID string, timeout time.Duration) (string, error) {
-	timer := time.AfterFunc(timeout, func() {
-		s.mu.Lock()
-		s.cond.Broadcast()
-		s.mu.Unlock()
-	})
+	timer := s.broadcastAtTimeout(timeout)
 	defer timer.Stop()
 
 	deadline := time.Now().Add(timeout)
@@ -233,6 +328,56 @@ func (s *Sender) WaitForApp(appID string, timeout time.Duration) (string, error)
 		}
 		s.cond.Wait()
 	}
+}
+
+// WaitForAppStopped blocks until an app is no longer present in receiver status.
+func (s *Sender) WaitForAppStopped(appID string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	timer := s.broadcastAtTimeout(timeout)
+	defer timer.Stop()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for s.appRunningLocked(appID) {
+		if err := s.waitErrorLocked(deadline, appID+" to stop"); err != nil {
+			return err
+		}
+		s.cond.Wait()
+	}
+	return nil
+}
+
+func (s *Sender) appRunningLocked(appID string) bool {
+	if s.status == nil {
+		return false
+	}
+	for _, app := range s.status.Applications {
+		if app.AppID == appID {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Sender) broadcastAtTimeout(timeout time.Duration) *time.Timer {
+	return time.AfterFunc(timeout, func() {
+		s.mu.Lock()
+		s.cond.Broadcast()
+		s.mu.Unlock()
+	})
+}
+
+func (s *Sender) waitErrorLocked(deadline time.Time, waitingFor string) error {
+	if s.err != nil {
+		return s.err
+	}
+	if s.closed {
+		return errors.New("connection closed")
+	}
+	if !time.Now().Before(deadline) {
+		return fmt.Errorf("timed out waiting for %s", waitingFor)
+	}
+	return nil
 }
 
 func (s *Sender) readLoop() {
@@ -270,7 +415,14 @@ func (s *Sender) handleReceiverMessage(castMessage *channel.CastMessage) {
 		return
 	}
 
-	switch envelope.Type {
+	switch envelope.messageType() {
+	case "GET_APP_AVAILABILITY":
+		var msg appAvailabilityMessage
+		if err := json.Unmarshal(payload, &msg); err != nil {
+			s.log.Warn("failed to parse app availability", "err", err)
+			return
+		}
+		s.updateAvailability(msg.Availability)
 	case "RECEIVER_STATUS":
 		var msg receiverStatusMessage
 		if err := json.Unmarshal(payload, &msg); err != nil {
@@ -283,6 +435,13 @@ func (s *Sender) handleReceiverMessage(castMessage *channel.CastMessage) {
 		_ = json.Unmarshal(payload, &msg)
 		s.setError(fmt.Errorf("receiver reported %s: %s", envelope.Type, msg.Reason))
 	}
+}
+
+func (s *Sender) updateAvailability(availability map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.availability = availability
+	s.cond.Broadcast()
 }
 
 func (s *Sender) updateStatus(payload statusPayload) {
@@ -298,4 +457,10 @@ func (s *Sender) setError(err error) {
 	defer s.mu.Unlock()
 	s.err = err
 	s.cond.Broadcast()
+}
+
+func (s *Sender) clearError() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.err = nil
 }

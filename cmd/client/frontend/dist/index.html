@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
-    <main>
+    <main id="device-list-view">
       <header>
         <div>
           <p class="eyebrow">GOCAST</p>
@@ -20,6 +20,35 @@
       <section aria-live="polite">
         <div id="status" class="status">Ready to scan.</div>
         <div id="devices" class="devices"></div>
+      </section>
+    </main>
+
+    <main id="device-control-view" hidden>
+      <header class="control-header">
+        <div>
+          <button id="back" class="back" type="button">← All devices</button>
+          <p class="eyebrow">DEVICE CONTROL</p>
+          <h1 id="selected-device-name">Device</h1>
+          <p id="selected-device-details" class="subtitle"></p>
+        </div>
+      </header>
+
+      <div id="control-status" class="status" aria-live="polite"></div>
+      <section class="control-panel">
+        <aside class="apps-panel" aria-label="Available applications">
+          <div class="panel-heading">
+            <h2>Apps</h2>
+            <span id="app-count"></span>
+          </div>
+          <div id="apps" class="apps"></div>
+        </aside>
+
+        <section id="app-controls" class="app-controls">
+          <div class="empty app-empty">
+            <strong>Select an app</strong>
+            <span>Choose an application to see its controls.</span>
+          </div>
+        </section>
       </section>
     </main>
     <script src="/app.js"></script>
