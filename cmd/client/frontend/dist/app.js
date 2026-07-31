@@ -83,6 +83,19 @@ function renderAppControls() {
     return;
   }
 
+  const isYouTube = app.id === "233637DE";
+  const youtubeControls = isYouTube ? `
+    <form id="youtube-form" class="youtube-controls">
+      <label for="youtube-url">YouTube video URL</label>
+      <div class="input-action">
+        <input id="youtube-url" name="youtube-url" type="url" required placeholder="https://www.youtube.com/watch?v=…">
+        <button type="submit">${app.running ? "Play video" : "Launch and play"}</button>
+      </div>
+    </form>` : "";
+  const appAction = app.running ? `
+    <button id="app-action" class="danger" type="button" data-action="terminate">Terminate app</button>` : (!isYouTube ? `
+    <button id="app-action" type="button" data-action="launch">Launch app</button>` : "");
+
   appControls.innerHTML = `
     <div class="control-copy">
       <p class="eyebrow">${app.running ? "RUNNING" : "AVAILABLE"}</p>
@@ -90,9 +103,10 @@ function renderAppControls() {
       <code>${escapeHTML(app.id)}</code>
       <p>${escapeHTML(app.statusText || (app.running ? "This app is currently active." : "This app can be launched on the selected device."))}</p>
     </div>
-    <button id="app-action" class="${app.running ? "danger" : ""}" type="button" data-action="${app.running ? "terminate" : "launch"}">
-      ${app.running ? "Terminate app" : "Launch app"}
-    </button>`;
+    <div class="control-actions">
+      ${youtubeControls}
+      ${appAction}
+    </div>`;
 }
 
 function showDeviceList() {
@@ -151,6 +165,24 @@ async function runAppAction(button) {
   }
 }
 
+async function playYouTube(form) {
+  const url = new FormData(form).get("youtube-url");
+  const button = form.querySelector("button[type=submit]");
+  button.disabled = true;
+  controlStatus.className = "status scanning";
+  controlStatus.textContent = "Sending video to YouTube…";
+  try {
+    const found = await window.go.main.App.PlayYouTube(url);
+    renderApps(found);
+    controlStatus.className = "status";
+    controlStatus.textContent = "Video sent to YouTube";
+  } catch (error) {
+    controlStatus.className = "status error";
+    controlStatus.textContent = `YouTube playback failed: ${error}`;
+    button.disabled = false;
+  }
+}
+
 async function scan() {
   refresh.disabled = true;
   refresh.textContent = "Scanning…";
@@ -196,6 +228,13 @@ appControls.addEventListener("click", (event) => {
   const button = event.target.closest("#app-action");
   if (button) {
     runAppAction(button);
+  }
+});
+
+appControls.addEventListener("submit", (event) => {
+  if (event.target.matches("#youtube-form")) {
+    event.preventDefault();
+    playYouTube(event.target);
   }
 });
 

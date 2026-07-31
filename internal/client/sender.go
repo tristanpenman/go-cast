@@ -24,11 +24,12 @@ const (
 // Application describes a running receiver application, as reported by a
 // RECEIVER_STATUS message.
 type Application struct {
-	AppID       string `json:"appId"`
-	DisplayName string `json:"displayName"`
-	SessionID   string `json:"sessionId"`
-	StatusText  string `json:"statusText"`
-	TransportID string `json:"transportId"`
+	AppID        string `json:"appId"`
+	DisplayName  string `json:"displayName"`
+	IsIdleScreen bool   `json:"isIdleScreen"`
+	SessionID    string `json:"sessionId"`
+	StatusText   string `json:"statusText"`
+	TransportID  string `json:"transportId"`
 }
 
 // ReceiverStatus is the most recent status reported by the receiver.
@@ -288,7 +289,7 @@ func (s *Sender) transportIDLocked(appID string) string {
 		return ""
 	}
 	for _, app := range s.status.Applications {
-		if app.AppID == appID && app.TransportID != "" {
+		if app.AppID == appID && !app.IsIdleScreen && app.TransportID != "" {
 			return app.TransportID
 		}
 	}
@@ -352,7 +353,7 @@ func (s *Sender) appRunningLocked(appID string) bool {
 		return false
 	}
 	for _, app := range s.status.Applications {
-		if app.AppID == appID {
+		if app.AppID == appID && !app.IsIdleScreen {
 			return true
 		}
 	}

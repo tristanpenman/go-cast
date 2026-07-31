@@ -61,3 +61,28 @@ func TestDeviceAppsMergesAvailabilityAndRunningStatus(t *testing.T) {
 		t.Fatalf("unexpected custom app: %+v", got[2])
 	}
 }
+
+func TestDeviceAppsDoesNotMarkIdleScreenAsRunning(t *testing.T) {
+	availability := map[string]string{"233637DE": "APP_AVAILABLE"}
+	status := &castclient.ReceiverStatus{Applications: []castclient.Application{
+		{AppID: "233637DE", DisplayName: "YouTube", IsIdleScreen: true, SessionID: "idle-session"},
+	}}
+
+	got := deviceApps(availability, status)
+	if len(got) != 1 {
+		t.Fatalf("expected YouTube to remain available, got %+v", got)
+	}
+	if got[0].Running {
+		t.Fatalf("idle-screen app marked running: %+v", got[0])
+	}
+}
+
+func TestPlayYouTubeValidatesURLBeforeConnecting(t *testing.T) {
+	app := &App{}
+	if _, err := app.PlayYouTube("https://example.com/video"); err == nil {
+		t.Fatal("expected unsupported YouTube URL to fail")
+	}
+	if _, err := app.PlayYouTube("https://youtu.be/dQw4w9WgXcQ"); err == nil || err.Error() != "no device selected" {
+		t.Fatalf("expected no-device error for a valid URL, got %v", err)
+	}
+}

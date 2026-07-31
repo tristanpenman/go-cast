@@ -37,6 +37,19 @@ func TestHandleReceiverStatusIncludesSessionID(t *testing.T) {
 	}
 }
 
+func TestIdleScreenIsNotTreatedAsRunning(t *testing.T) {
+	sender := testSender()
+	payload := `{"requestId":3,"responseType":"RECEIVER_STATUS","status":{"applications":[{"appId":"233637DE","displayName":"YouTube","isIdleScreen":true,"sessionId":"idle-session","transportId":"idle-transport"}]}}`
+	sender.handleReceiverMessage(receiverMessage(payload))
+
+	if transportID := sender.TransportID("233637DE"); transportID != "" {
+		t.Fatalf("idle screen returned transport ID %q", transportID)
+	}
+	if sender.appRunningLocked("233637DE") {
+		t.Fatal("idle screen was treated as a running app")
+	}
+}
+
 func TestVerifyDeviceAuthResponseRejectsMalformedPayload(t *testing.T) {
 	if err := verifyDeviceAuthResponse([]byte("not protobuf"), []byte("peer cert"), nil, time.Now()); err == nil {
 		t.Fatal("expected malformed device-auth response to fail")

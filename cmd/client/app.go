@@ -12,6 +12,7 @@ import (
 )
 
 const receiverTimeout = 10 * time.Second
+const youtubeAppID = "233637DE"
 
 type knownApplication struct {
 	ID   string
@@ -19,7 +20,7 @@ type knownApplication struct {
 }
 
 var knownApplications = []knownApplication{
-	{ID: "233637DE", Name: "YouTube"},
+	{ID: youtubeAppID, Name: "YouTube"},
 	{ID: "0F5096E8", Name: "Chrome mirroring"},
 	{ID: "674A0243", Name: "Android mirroring"},
 }
@@ -108,6 +109,37 @@ func (a *App) LaunchApp(appID string) ([]DeviceApp, error) {
 	return deviceApps(a.sender.Availability(), a.sender.Status()), nil
 }
 
+// PlayYouTube launches YouTube if needed, connects to its application
+// transport, and asks it to play the supplied video URL.
+func (a *App) PlayYouTube(rawURL string) ([]DeviceApp, error) {
+	videoID, err := castclient.ParseYouTubeVideoID(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid YouTube URL: %w", err)
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.sender == nil {
+		return nil, fmt.Errorf("no device selected")
+	}
+
+	transportID := a.sender.TransportID(youtubeAppID)
+	if transportID == "" {
+		if a.sender.Availability()[youtubeAppID] != "APP_AVAILABLE" {
+			return nil, fmt.Errorf("YouTube is not available on this device")
+		}
+		a.sender.LaunchApp(youtubeAppID)
+		transportID, err = a.sender.WaitForApp(youtubeAppID, receiverTimeout)
+		if err != nil {
+			return nil, fmt.Errorf("launch YouTube: %w", err)
+		}
+	}
+
+	a.sender.ConnectTransport(transportID)
+	a.sender.FlingYouTubeVideo(transportID, videoID)
+	return deviceApps(a.sender.Availability(), a.sender.Status()), nil
+}
+
 // TerminateApp stops a running application on the selected receiver.
 func (a *App) TerminateApp(appID string) ([]DeviceApp, error) {
 	a.mu.Lock()
@@ -122,7 +154,7 @@ func (a *App) TerminateApp(appID string) ([]DeviceApp, error) {
 		return nil, fmt.Errorf("receiver status is unavailable")
 	}
 	for _, runningApp := range status.Applications {
-		if runningApp.AppID != appID {
+		if runningApp.AppID != appID || runningApp.IsIdleScreen {
 			continue
 		}
 		if runningApp.SessionID == "" {
@@ -157,6 +189,9 @@ func deviceApps(availability map[string]string, status *castclient.ReceiverStatu
 	running := make(map[string]castclient.Application)
 	if status != nil {
 		for _, app := range status.Applications {
+			if app.IsIdleScreen {
+				continue
+			}
 			running[app.AppID] = app
 		}
 	}

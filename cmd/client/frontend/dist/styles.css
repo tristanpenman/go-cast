@@ -184,6 +184,22 @@ button:disabled { cursor: wait; opacity: .65; }
 .control-copy h2 { margin: 5px 0 8px; font-size: 26px; }
 .control-copy code { color: #71819d; font-size: 12px; }
 .control-copy > p:last-child { max-width: 440px; margin: 22px 0 0; color: #9ba9be; line-height: 1.55; }
+.control-actions { display: grid; width: 100%; gap: 18px; }
+.youtube-controls { display: grid; gap: 8px; }
+.youtube-controls label { color: #aebbd0; font-size: 13px; font-weight: 650; }
+.input-action { display: flex; gap: 8px; }
+.input-action input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid #33415c;
+  border-radius: 10px;
+  padding: 11px 12px;
+  color: #f1f5fc;
+  background: #101827;
+  font: inherit;
+}
+.input-action input:focus { border-color: #6ba0ff; outline: 2px solid rgba(107, 160, 255, .18); }
+.input-action button { white-space: nowrap; }
 .danger { border-color: #a7474f; background: #8f3038; }
 .danger:hover { background: #a63a43; }
 .compact { padding: 24px 14px; }
@@ -194,4 +210,5 @@ button:disabled { cursor: wait; opacity: .65; }
   header { align-items: flex-start; flex-direction: column; gap: 20px; }
   .control-panel { grid-template-columns: 1fr; }
   .apps-panel { border-right: 0; border-bottom: 1px solid #253149; }
+  .input-action { align-items: stretch; flex-direction: column; }
 }
