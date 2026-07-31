@@ -77,8 +77,8 @@ These are primarily idioms that apply to this project. They might not apply else
 
 ### Desktop and frontend
 
-- Keep framework wiring in `cmd/client` and reusable logic in packages.
-- `cmd/client/frontend/dist` is dependency-free and embedded. Do not add a JavaScript build step for small changes.
+- Keep framework wiring in `cmd/remote` and reusable logic in packages.
+- `cmd/remote/frontend/dist` is dependency-free and embedded. Do not add a JavaScript build step for small changes.
 
 ## Integrations
 

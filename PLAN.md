@@ -4,7 +4,7 @@ Goal is to provide a desktop sender app that discovers Cast devices, shows avail
 
 ## Sender Implementation
 
-1. ~~Extract sender protocol logic from `cmd/sender` into an internal sender package:~~
+1. ~~Extract sender protocol logic into an internal client package:~~
     - ~~Connect/authenticate to a receiver.~~
     - ~~Send `CONNECT`, `GET_STATUS`, `LAUNCH`, and app namespace messages.~~
     - ~~Track receiver status, running sessions, app IDs, transport IDs, and errors.~~
@@ -27,7 +27,6 @@ Goal is to provide a desktop sender app that discovers Cast devices, shows avail
 5. Introduce Wails as the desktop shell:
     - Keep Go as the backend and expose discovery, connect, launch, and YouTube commands to the frontend.
     - Build a compact UI with device list, app list, receiver status, YouTube URL input, transport logs, and error state.
-    - Keep the existing CLI sender as a testable protocol/debug entry point.
 6. Validate against real devices:
     - Test discovery, status, YouTube launch, and YouTube playback on Chromecast/Google TV hardware.
     - Record receiver payloads needed to fill gaps in app status and media control.
@@ -35,7 +34,7 @@ Goal is to provide a desktop sender app that discovers Cast devices, shows avail
 
 ## Local Video Sender
 
-- Keep local video casting behind the CLI until the sender service layer is stable.
+- Add local video casting after the sender service layer is stable.
 - Finish launch flow for the mirroring receiver app.
 - Implement media transport only after sender UI can reliably select a device and launch an app.
 
