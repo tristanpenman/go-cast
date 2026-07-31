@@ -151,9 +151,12 @@ func youtubeLoungeToken(ctx context.Context, httpClient *http.Client, baseURL, s
 }
 
 func youtubeLoungeBind(ctx context.Context, httpClient *http.Client, baseURL, loungeToken string) (string, string, error) {
-	params := url.Values{"RID": {"0"}, "VER": {"8"}, "CVER": {"1"}}
+	params := url.Values{
+		"RID": {"0"}, "VER": {"8"}, "CVER": {"1"},
+		"TYPE": {"bind"}, "auth_failure_option": {"send_error"},
+	}
 	youtubeLog.Info("sending YouTube lounge bind request", "rid", "0", "mdxVersion", "3")
-	response, err := youtubePost(ctx, httpClient, baseURL+"api/lounge/bc/bind", params, youtubeBindData(), loungeToken)
+	response, err := youtubePost(ctx, httpClient, baseURL+"api/lounge/bc/bind", params, youtubeBindData(loungeToken), loungeToken)
 	if err != nil {
 		return "", "", fmt.Errorf("bind YouTube lounge session: %w", err)
 	}
@@ -175,15 +178,22 @@ func youtubeLoungeBind(ctx context.Context, httpClient *http.Client, baseURL, lo
 func youtubeLoungeSetPlaylist(ctx context.Context, httpClient *http.Client, baseURL, loungeToken, sid, gsessionID, videoID string) error {
 	params := url.Values{
 		"SID": {sid}, "gsessionid": {gsessionID}, "RID": {"1"}, "VER": {"8"}, "CVER": {"1"},
+		"v": {"2"}, "TYPE": {"bind"}, "t": {"1"}, "AID": {"0"}, "CI": {"0"},
+		"name": {"GoCast"}, "id": {"aaaaaaaaaaaaaaaaaaaaaaaaaa"}, "device": {"REMOTE_CONTROL"},
+		"loungeIdToken": {loungeToken},
 	}
 	form := url.Values{
-		"req0__listId":       {""},
-		"req0__sc":           {"setPlaylist"},
-		"req0__currentTime":  {"0"},
-		"req0__currentIndex": {"-1"},
-		"req0__audioOnly":    {"false"},
-		"req0__videoId":      {videoID},
-		"count":              {"1"},
+		"count":             {"1"},
+		"ofs":               {"0"},
+		"req0__sc":          {"setPlaylist"},
+		"req0_listId":       {""},
+		"req0_currentTime":  {"0"},
+		"req0_currentIndex": {"-1"},
+		"req0_audioOnly":    {"false"},
+		"req0_videoId":      {videoID},
+		"req0_params":       {""},
+		"req0_playerParams": {""},
+		"req0_prioritizeMobileSenderPlaybackStateOnConnection": {"true"},
 	}
 	youtubeLog.Info("sending YouTube setPlaylist request", "videoId", videoID, "rid", "1", "currentTime", "0")
 	response, err := youtubePost(ctx, httpClient, baseURL+"api/lounge/bc/bind", params, form, loungeToken)
@@ -202,10 +212,15 @@ func youtubeLoungeSetPlaylist(ctx context.Context, httpClient *http.Client, base
 	return nil
 }
 
-func youtubeBindData() url.Values {
+func youtubeBindData(loungeToken string) url.Values {
 	return url.Values{
-		"device": {"REMOTE_CONTROL"}, "id": {"aaaaaaaaaaaaaaaaaaaaaaaaaa"}, "name": {"GoCast"},
-		"mdx-version": {"3"}, "pairing_type": {"cast"}, "app": {"android-phone-13.14.55"},
+		"app": {"web"}, "mdx-version": {"3"}, "name": {"GoCast"},
+		"id": {"aaaaaaaaaaaaaaaaaaaaaaaaaa"}, "device": {"REMOTE_CONTROL"},
+		"capabilities": {"que,dsdtr,atp"}, "method": {"setPlaylist"},
+		"magnaKey": {"cloudPairedDevice"}, "ui": {"false"}, "theme": {"cl"},
+		"deviceContext": {"user_agent=dunno"}, "os_name": {"android"},
+		"window_width_points": {""}, "window_height_points": {""}, "ms": {""},
+		"loungeIdToken": {loungeToken},
 	}
 }
 

@@ -91,19 +91,22 @@ func TestPlayYouTubeViaLounge(t *testing.T) {
 			}
 			_, _ = fmt.Fprint(response, `{"screens":[{"loungeToken":"lounge-token"}]}`)
 		case 2:
-			if request.URL.Path != "/api/lounge/bc/bind" || request.URL.Query().Get("RID") != "0" {
+			if request.URL.Path != "/api/lounge/bc/bind" || request.URL.Query().Get("RID") != "0" || request.URL.Query().Get("TYPE") != "bind" {
 				t.Errorf("unexpected bind request: %s %+v", request.URL.Path, request.URL.Query())
 			}
-			if request.Header.Get("X-YouTube-LoungeId-Token") != "lounge-token" || request.Form.Get("device") != "REMOTE_CONTROL" {
+			if request.Header.Get("X-YouTube-LoungeId-Token") != "lounge-token" || request.Form.Get("device") != "REMOTE_CONTROL" || request.Form.Get("loungeIdToken") != "lounge-token" {
 				t.Errorf("unexpected bind headers or form: %+v %+v", request.Header, request.Form)
 			}
 			_, _ = fmt.Fprint(response, `[[0,["c","sid-123","",8]],[1,["S","gsession-123"]]]`)
 		case 3:
-			if request.URL.Query().Get("SID") != "sid-123" || request.URL.Query().Get("gsessionid") != "gsession-123" {
+			if request.URL.Query().Get("SID") != "sid-123" || request.URL.Query().Get("gsessionid") != "gsession-123" || request.URL.Query().Get("TYPE") != "bind" {
 				t.Errorf("unexpected session request: %+v", request.URL.Query())
 			}
-			if request.Form.Get("req0__sc") != "setPlaylist" || request.Form.Get("req0__videoId") != "video-123" {
+			if request.Form.Get("req0__sc") != "setPlaylist" || request.Form.Get("req0_videoId") != "video-123" || request.Form.Get("ofs") != "0" {
 				t.Errorf("unexpected playlist request: %+v", request.Form)
+			}
+			if _, malformed := request.Form["req0__videoId"]; malformed {
+				t.Errorf("playlist request contains malformed video field: %+v", request.Form)
 			}
 		default:
 			t.Errorf("unexpected extra request %d", requestNumber)
