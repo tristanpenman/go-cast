@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	mirroringAppID = "0F5096E8"
-	youtubeAppID   = "233637DE"
+	mirroringAppID        = "0F5096E8"
+	youtubeAppID          = "233637DE"
+	youtubeAndroidTVAppID = "2C6A6E3D"
 )
 
 var log = common.NewLogger("main")
@@ -84,14 +85,36 @@ func main() {
 	s := client.NewSender(castClient, log)
 	s.Connect()
 	s.RequestStatus()
-	s.LaunchApp(effectiveAppID)
 
-	transportID, err := s.WaitForApp(effectiveAppID, 10*time.Second)
-	if err != nil {
-		log.Error("failed to launch app", "err", err)
-		_ = castClient.Close()
-		wg.Wait()
-		return
+	transportID := ""
+	if youtubeVideoID != "" {
+		s.RequestAppAvailability([]string{youtubeAndroidTVAppID, youtubeAppID})
+		if _, err = s.WaitForStatus(10 * time.Second); err == nil {
+			transportID = s.SessionTransportID(youtubeAndroidTVAppID)
+			if transportID == "" {
+				transportID = s.SessionTransportID(youtubeAppID)
+			}
+		}
+		if availability, availabilityErr := s.WaitForAvailability(10 * time.Second); availabilityErr == nil && transportID == "" {
+			if availability[youtubeAndroidTVAppID] == "APP_AVAILABLE" {
+				effectiveAppID = youtubeAndroidTVAppID
+			}
+		}
+	}
+
+	if transportID == "" {
+		s.LaunchApp(effectiveAppID)
+		if youtubeVideoID != "" {
+			transportID, err = s.WaitForAppTransport(effectiveAppID, 30*time.Second)
+		} else {
+			transportID, err = s.WaitForApp(effectiveAppID, 10*time.Second)
+		}
+		if err != nil {
+			log.Error("failed to launch app", "err", err)
+			_ = castClient.Close()
+			wg.Wait()
+			return
+		}
 	}
 
 	s.ConnectTransport(transportID)

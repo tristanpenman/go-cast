@@ -77,6 +77,34 @@ func TestDeviceAppsDoesNotMarkIdleScreenAsRunning(t *testing.T) {
 	}
 }
 
+func TestDeviceAppsTreatsAndroidTVYouTubeAsUniversalYouTube(t *testing.T) {
+	availability := map[string]string{
+		"233637DE": "APP_AVAILABLE",
+		"2C6A6E3D": "APP_AVAILABLE",
+	}
+	status := &castclient.ReceiverStatus{Applications: []castclient.Application{
+		{
+			AppID:          "2C6A6E3D",
+			AppType:        "ANDROID_TV",
+			DisplayName:    "YouTube",
+			UniversalAppID: "233637DE",
+			TransportID:    "native-transport",
+			StatusText:     "Playing",
+		},
+	}}
+
+	got := deviceApps(availability, status)
+	if len(got) != 1 {
+		t.Fatalf("expected one canonical YouTube app, got %+v", got)
+	}
+	if got[0].ID != youtubeAppID || !got[0].Running || got[0].StatusText != "Playing" {
+		t.Fatalf("unexpected YouTube app: %+v", got[0])
+	}
+	if launchID := preferredLaunchAppID(youtubeAppID, availability); launchID != youtubeAndroidTVAppID {
+		t.Fatalf("expected native YouTube launch ID, got %q", launchID)
+	}
+}
+
 func TestPlayYouTubeValidatesURLBeforeConnecting(t *testing.T) {
 	app := &App{}
 	if _, err := app.PlayYouTube("https://example.com/video"); err == nil {

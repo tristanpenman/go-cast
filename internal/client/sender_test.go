@@ -41,6 +41,20 @@ func TestHandleReceiverStatusIncludesSessionID(t *testing.T) {
 	}
 }
 
+func TestNativeYouTubeMatchesUniversalAppID(t *testing.T) {
+	sender := testSender()
+	payload := `{"requestId":2,"responseType":"RECEIVER_STATUS","status":{"applications":[{"appId":"2C6A6E3D","appType":"ANDROID_TV","displayName":"YouTube","universalAppId":"233637DE","sessionId":"session-1","transportId":"transport-1"}]}}`
+	sender.handleReceiverMessage(receiverMessage(payload))
+
+	if transportID := sender.SessionTransportID("233637DE"); transportID != "transport-1" {
+		t.Fatalf("universal YouTube ID returned transport ID %q", transportID)
+	}
+	status := sender.Status()
+	if status == nil || len(status.Applications) != 1 || status.Applications[0].AppType != "ANDROID_TV" {
+		t.Fatalf("unexpected native YouTube status: %+v", status)
+	}
+}
+
 func TestIdleScreenIsNotTreatedAsRunning(t *testing.T) {
 	sender := testSender()
 	payload := `{"requestId":3,"responseType":"RECEIVER_STATUS","status":{"applications":[{"appId":"233637DE","displayName":"YouTube","isIdleScreen":true,"sessionId":"idle-session","transportId":"idle-transport"}]}}`

@@ -14,14 +14,16 @@ import (
 const receiverTimeout = 10 * time.Second
 const youtubeLaunchTimeout = 30 * time.Second
 const youtubeAppID = "233637DE"
+const youtubeAndroidTVAppID = "2C6A6E3D"
 
 type knownApplication struct {
-	ID   string
-	Name string
+	ID      string
+	Name    string
+	Aliases []string
 }
 
 var knownApplications = []knownApplication{
-	{ID: youtubeAppID, Name: "YouTube"},
+	{ID: youtubeAppID, Name: "YouTube", Aliases: []string{youtubeAndroidTVAppID}},
 	{ID: "0F5096E8", Name: "Chrome mirroring"},
 	{ID: "674A0243", Name: "Android mirroring"},
 }
@@ -72,9 +74,10 @@ func (a *App) SelectDevice(device discovery.Device) ([]DeviceApp, error) {
 	a.sender = sender
 
 	sender.Connect()
-	appIDs := make([]string, len(knownApplications))
-	for index, app := range knownApplications {
-		appIDs[index] = app.ID
+	appIDs := make([]string, 0, len(knownApplications)+1)
+	for _, app := range knownApplications {
+		appIDs = append(appIDs, app.ID)
+		appIDs = append(appIDs, app.Aliases...)
 	}
 	sender.RequestAppAvailability(appIDs)
 	sender.RequestStatus()
@@ -99,12 +102,13 @@ func (a *App) LaunchApp(appID string) ([]DeviceApp, error) {
 	if a.sender == nil {
 		return nil, fmt.Errorf("no device selected")
 	}
-	if a.sender.Availability()[appID] != "APP_AVAILABLE" {
+	launchAppID := preferredLaunchAppID(appID, a.sender.Availability())
+	if launchAppID == "" {
 		return nil, fmt.Errorf("app %s is not available on this device", appID)
 	}
 
-	a.sender.LaunchApp(appID)
-	if _, err := a.sender.WaitForApp(appID, receiverTimeout); err != nil {
+	a.sender.LaunchApp(launchAppID)
+	if _, err := a.sender.WaitForApp(launchAppID, receiverTimeout); err != nil {
 		return nil, fmt.Errorf("launch app: %w", err)
 	}
 	return deviceApps(a.sender.Availability(), a.sender.Status()), nil
@@ -126,17 +130,21 @@ func (a *App) PlayYouTube(rawURL string) ([]DeviceApp, error) {
 
 	// A ready-to-cast YouTube session may be marked as idle while retaining a
 	// usable app transport. Reuse that transport instead of launching again.
-	transportID := a.sender.SessionTransportID(youtubeAppID)
+	transportID := a.sender.SessionTransportID(youtubeAndroidTVAppID)
 	if transportID == "" {
-		if a.sender.Availability()[youtubeAppID] != "APP_AVAILABLE" {
+		transportID = a.sender.SessionTransportID(youtubeAppID)
+	}
+	if transportID == "" {
+		launchAppID := preferredLaunchAppID(youtubeAppID, a.sender.Availability())
+		if launchAppID == "" {
 			return nil, fmt.Errorf("YouTube is not available on this device")
 		}
-		a.sender.LaunchApp(youtubeAppID)
+		a.sender.LaunchApp(launchAppID)
 		// Some receivers take longer than the general control timeout to cold
 		// start YouTube. Requesting status also covers devices that don't send an
 		// unsolicited status update immediately after LAUNCH.
 		a.sender.RequestStatus()
-		transportID, err = a.sender.WaitForAppTransport(youtubeAppID, youtubeLaunchTimeout)
+		transportID, err = a.sender.WaitForAppTransport(launchAppID, youtubeLaunchTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("launch YouTube: %w", err)
 		}
@@ -167,14 +175,14 @@ func (a *App) TerminateApp(appID string) ([]DeviceApp, error) {
 		return nil, fmt.Errorf("receiver status is unavailable")
 	}
 	for _, runningApp := range status.Applications {
-		if runningApp.AppID != appID || runningApp.IsIdleScreen {
+		if !applicationMatchesKnownID(runningApp, appID) || runningApp.IsIdleScreen {
 			continue
 		}
 		if runningApp.SessionID == "" {
 			return nil, fmt.Errorf("running app %s has no session ID", appID)
 		}
 		a.sender.StopApp(runningApp.SessionID)
-		if err := a.sender.WaitForAppStopped(appID, receiverTimeout); err != nil {
+		if err := a.sender.WaitForAppStopped(runningApp.AppID, receiverTimeout); err != nil {
 			return nil, fmt.Errorf("terminate app: %w", err)
 		}
 		return deviceApps(a.sender.Availability(), a.sender.Status()), nil
@@ -211,8 +219,8 @@ func deviceApps(availability map[string]string, status *castclient.ReceiverStatu
 
 	apps := make([]DeviceApp, 0, len(knownApplications)+len(running))
 	for _, known := range knownApplications {
-		runningApp, isRunning := running[known.ID]
-		if availability[known.ID] != "APP_AVAILABLE" && !isRunning {
+		runningApp, isRunning := runningKnownApplication(running, known)
+		if !knownApplicationAvailable(known, availability) && !isRunning {
 			continue
 		}
 		apps = append(apps, DeviceApp{
@@ -221,7 +229,9 @@ func deviceApps(availability map[string]string, status *castclient.ReceiverStatu
 			StatusText: runningApp.StatusText,
 			Running:    isRunning,
 		})
-		delete(running, known.ID)
+		if isRunning {
+			delete(running, runningApp.AppID)
+		}
 	}
 
 	unknownIDs := make([]string, 0, len(running))
@@ -243,4 +253,65 @@ func deviceApps(availability map[string]string, status *castclient.ReceiverStatu
 		})
 	}
 	return apps
+}
+
+func preferredLaunchAppID(appID string, availability map[string]string) string {
+	for _, known := range knownApplications {
+		if known.ID != appID {
+			continue
+		}
+		// Prefer a platform-specific receiver, such as YouTube's Cast Connect
+		// Android TV app, over its universal web receiver.
+		for _, alias := range known.Aliases {
+			if availability[alias] == "APP_AVAILABLE" {
+				return alias
+			}
+		}
+	}
+	if availability[appID] == "APP_AVAILABLE" {
+		return appID
+	}
+	return ""
+}
+
+func knownApplicationAvailable(known knownApplication, availability map[string]string) bool {
+	if availability[known.ID] == "APP_AVAILABLE" {
+		return true
+	}
+	for _, alias := range known.Aliases {
+		if availability[alias] == "APP_AVAILABLE" {
+			return true
+		}
+	}
+	return false
+}
+
+func runningKnownApplication(running map[string]castclient.Application, known knownApplication) (castclient.Application, bool) {
+	for _, app := range running {
+		if applicationMatchesKnown(app, known) {
+			return app, true
+		}
+	}
+	return castclient.Application{}, false
+}
+
+func applicationMatchesKnown(app castclient.Application, known knownApplication) bool {
+	if app.MatchesAppID(known.ID) {
+		return true
+	}
+	for _, alias := range known.Aliases {
+		if app.MatchesAppID(alias) {
+			return true
+		}
+	}
+	return false
+}
+
+func applicationMatchesKnownID(app castclient.Application, appID string) bool {
+	for _, known := range knownApplications {
+		if known.ID == appID {
+			return applicationMatchesKnown(app, known)
+		}
+	}
+	return app.MatchesAppID(appID)
 }

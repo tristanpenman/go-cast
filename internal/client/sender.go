@@ -24,12 +24,18 @@ const (
 // Application describes a running receiver application, as reported by a
 // RECEIVER_STATUS message.
 type Application struct {
-	AppID        string `json:"appId"`
-	DisplayName  string `json:"displayName"`
-	IsIdleScreen bool   `json:"isIdleScreen"`
-	SessionID    string `json:"sessionId"`
-	StatusText   string `json:"statusText"`
-	TransportID  string `json:"transportId"`
+	AppID          string `json:"appId"`
+	AppType        string `json:"appType"`
+	DisplayName    string `json:"displayName"`
+	IsIdleScreen   bool   `json:"isIdleScreen"`
+	SessionID      string `json:"sessionId"`
+	StatusText     string `json:"statusText"`
+	TransportID    string `json:"transportId"`
+	UniversalAppID string `json:"universalAppId"`
+}
+
+func (a Application) MatchesAppID(appID string) bool {
+	return a.AppID == appID || a.UniversalAppID == appID
 }
 
 // ReceiverStatus is the most recent status reported by the receiver.
@@ -290,7 +296,7 @@ func (s *Sender) transportIDLocked(appID string) string {
 		return ""
 	}
 	for _, app := range s.status.Applications {
-		if app.AppID == appID && !app.IsIdleScreen && app.TransportID != "" {
+		if app.MatchesAppID(appID) && !app.IsIdleScreen && app.TransportID != "" {
 			return app.TransportID
 		}
 	}
@@ -311,7 +317,7 @@ func (s *Sender) sessionTransportIDLocked(appID string) string {
 		return ""
 	}
 	for _, app := range s.status.Applications {
-		if app.AppID == appID && app.TransportID != "" {
+		if app.MatchesAppID(appID) && app.TransportID != "" {
 			return app.TransportID
 		}
 	}
@@ -385,7 +391,7 @@ func (s *Sender) appSessionStateLocked(appID string) string {
 		return "no receiver status received"
 	}
 	for _, app := range s.status.Applications {
-		if app.AppID == appID {
+		if app.MatchesAppID(appID) {
 			return fmt.Sprintf("app reported with idle=%t, sessionId=%q, transportId=%q", app.IsIdleScreen, app.SessionID, app.TransportID)
 		}
 	}
@@ -414,7 +420,7 @@ func (s *Sender) appRunningLocked(appID string) bool {
 		return false
 	}
 	for _, app := range s.status.Applications {
-		if app.AppID == appID && !app.IsIdleScreen {
+		if app.MatchesAppID(appID) && !app.IsIdleScreen {
 			return true
 		}
 	}
