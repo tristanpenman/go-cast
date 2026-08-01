@@ -157,12 +157,18 @@ protoc --go_opt=paths=source_relative --go_out=. ./internal/channel/cast_channel
 
 ### Tests
 
-Tests have been written in the style of unit tests.
-
-To run the tests:
+The Go test suite consists primarily of unit tests. Run it from the repository root:
 
 ```sh
-go test ./... -v
+go test -v ./...
+```
+
+### Linting
+
+The project uses `golangci-lint` v2.11 in CI. Run the same checks locally from the repository root:
+
+```sh
+golangci-lint run ./...
 ```
 
 ### Coverage
