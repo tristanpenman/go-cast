@@ -145,8 +145,6 @@ The following architecture diagram summarises the overall design of the GoCast R
 
 ![Receiver Architecture](./doc/receiver-architecture.drawio.png)
 
-In terms of actual code, these concepts are implemented as Go structs.
-
 ### Protobuf
 
 The Chromecast protocol relies on message types defined in protobuf format. The cast_channel.proto file in pkg/channel has been borrowed from the Chromium source code. While this is not likely to change, you can regenerate the Go bindings with the following command:
