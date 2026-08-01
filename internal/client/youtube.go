@@ -134,7 +134,7 @@ func youtubeLoungeToken(ctx context.Context, httpClient *http.Client, baseURL, s
 	if err != nil {
 		return "", fmt.Errorf("get YouTube lounge token: %w", err)
 	}
-	defer response.Body.Close()
+	defer closeYouTubeResponseBody(response.Body)
 	var payload struct {
 		Screens []struct {
 			LoungeToken string `json:"loungeToken"`
@@ -160,7 +160,7 @@ func youtubeLoungeBind(ctx context.Context, httpClient *http.Client, baseURL, lo
 	if err != nil {
 		return "", "", fmt.Errorf("bind YouTube lounge session: %w", err)
 	}
-	defer response.Body.Close()
+	defer closeYouTubeResponseBody(response.Body)
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		return "", "", fmt.Errorf("read YouTube lounge bind response: %w", err)
@@ -200,7 +200,7 @@ func youtubeLoungeSetPlaylist(ctx context.Context, httpClient *http.Client, base
 	if err != nil {
 		return fmt.Errorf("set YouTube playlist: %w", err)
 	}
-	defer response.Body.Close()
+	defer closeYouTubeResponseBody(response.Body)
 	body, err := io.ReadAll(io.LimitReader(response.Body, 16*1024))
 	if err != nil {
 		return fmt.Errorf("read YouTube playlist response: %w", err)
@@ -224,6 +224,12 @@ func youtubeBindData(loungeToken string) url.Values {
 	}
 }
 
+func closeYouTubeResponseBody(body io.Closer) {
+	if err := body.Close(); err != nil {
+		youtubeLog.Warn("failed to close YouTube response body", "err", err)
+	}
+}
+
 func youtubePost(ctx context.Context, httpClient *http.Client, endpoint string, params, form url.Values, loungeToken string) (*http.Response, error) {
 	if len(params) > 0 {
 		endpoint += "?" + params.Encode()
@@ -242,7 +248,7 @@ func youtubePost(ctx context.Context, httpClient *http.Client, endpoint string, 
 		return nil, err
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		defer response.Body.Close()
+		defer closeYouTubeResponseBody(response.Body)
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 1024))
 		return nil, fmt.Errorf("YouTube returned %s: %s", response.Status, strings.TrimSpace(string(body)))
 	}
