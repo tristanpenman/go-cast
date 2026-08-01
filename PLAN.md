@@ -1,34 +1,35 @@
 # Plan
 
-Goal is to provide a desktop sender app that discovers Cast devices, shows available apps and their status for the selected device, and controls YouTube when the receiver exposes the YouTube app.
+Goal is to provide a desktop remote control app that discovers Cast devices, shows available apps and their status for the selected device, and controls YouTube when the receiver exposes the YouTube app.
 
-## Sender Implementation
+## Remote Control
 
 1. ~~Extract sender protocol logic into an internal client package:~~
     - ~~Connect/authenticate to a receiver.~~
     - ~~Send `CONNECT`, `GET_STATUS`, `LAUNCH`, and app namespace messages.~~
     - ~~Track receiver status, running sessions, app IDs, transport IDs, and errors.~~
-2. Merge discovery into the sender workflow:
-    - Reuse the mDNS discovery command logic as a library API.
-    - List nearby receivers with friendly name, model, host, port, and connection state.
-    - Allow manual host entry for networks where discovery fails.
-3. Define the app browsing model:
-    - Show currently running receiver apps from `RECEIVER_STATUS`.
-    - Show known launchable apps from a local app registry, starting with:
-      - YouTube: `233637DE`
-      - Chrome mirroring: `0F5096E8`
-      - Android mirroring: `674A0243`
-4. Add YouTube control support:
-    - Parse common YouTube URLs into video IDs.
-    - Launch YouTube if needed.
-    - Wait for the YouTube transport ID.
-    - Send `flingVideo` on `urn:x-cast:com.google.youtube.mdx`.
+2. ~~Merge discovery into the sender workflow:~~
+    - ~~Reuse the mDNS discovery command logic as a library API.~~
+    - ~~List nearby receivers with friendly name, model, host, port, and connection state.~~
+    - ~~Allow manual host entry for networks where discovery fails.~~
+3. ~~Define the app browsing model:~~
+    - ~~Show currently running receiver apps from `RECEIVER_STATUS`.~~
+    - ~~Show known launchable apps from a local app registry, starting with:~~
+      - ~~YouTube: `233637DE`~~
+      - ~~YouTube Android TV: `2C6A6E3D`~~
+      - ~~Chrome mirroring: `0F5096E8`~~
+      - ~~Android mirroring: `674A0243`~~
+4. ~~Add YouTube control support:~~
+    - ~~Parse common YouTube URLs into video IDs.~~
+    - ~~Launch YouTube if needed.~~
+    - ~~Wait for the YouTube transport ID.~~
+    - ~~Send `flingVideo` on `urn:x-cast:com.google.youtube.mdx`.~~
     - Add basic controls once namespace messages are confirmed against a real receiver: play/pause, seek, stop, and current video state.
-5. Introduce Wails as the desktop shell:
-    - Keep Go as the backend and expose discovery, connect, launch, and YouTube commands to the frontend.
-    - Build a compact UI with device list, app list, receiver status, YouTube URL input, transport logs, and error state.
+5. ~~Introduce Wails as the desktop shell:~~
+    - ~~Keep Go as the backend and expose discovery, connect, launch, and YouTube commands to the frontend.~~
+    - ~~Build a compact UI with device list, app list, receiver status, YouTube URL input, transport logs, and error state.~~
 6. Validate against real devices:
-    - Test discovery, status, YouTube launch, and YouTube playback on Chromecast/Google TV hardware.
+    - ~~Test discovery, status, YouTube launch, and YouTube playback on Chromecast/Google TV hardware.~~
     - Record receiver payloads needed to fill gaps in app status and media control.
     - Add integration notes and fixtures where real-device behavior differs from the local receiver.
 
@@ -59,4 +60,7 @@ This project was originally developed around a custom Chromecast receiver implem
 - More protocol documentation
 - Allow Cloudflare worker to be hosted locally
 - Windows and macOS builds
-  - Once Wails support has been implemented
+  - Add Windows builds to CI
+- Port existing frontend to Vue.js
+  - Adopt TypeScript if possible
+  - Add dynamic scrubbing controls
