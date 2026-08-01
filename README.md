@@ -1,18 +1,40 @@
 # GoCast
 
-This project is intended to offer a complete implementation of the [Google Cast](https://en.wikipedia.org/wiki/Google_Cast) protocol, written in Go, with custom GoCast Remote and Receiver apps.
+This project is intended to offer a complete implementation of the [Google Cast](https://en.wikipedia.org/wiki/Google_Cast) protocol, written in Go, with custom Chromecast Remote and Receiver apps.
 
-GoCast currently supports streams using VP8, with H.264 support on the roadmap. Audio is currently not supported.
+![GoCast Remote](./doc/gocast-remote.png)
 
-## Design
+The _GoCast Remote_ app currently supports device discovery, and playing YouTube videos on the Chromecast and Android TV versions of the YouTube app. These are identified by app IDs 233637DE and 2C6A6E3D respectively.
 
-The following architecture diagram summarises the overall design of the GoCast Receiver app, and how it accommodates the requirements of the Google Cast protocol:
-
-![Receiver Architecture](./doc/receiver-architecture.drawio.png)
-
-In terms of actual code, these concepts are implemented as Go structs.
+The _GoCast Receiver_ currently supports streams using VP8, with H.264 support on the roadmap. Audio is currently not supported.
 
 ## Usage
+
+### GoCast Remote
+
+The Wails remote control discovers and lists Google Cast devices on the local network. Install the Wails CLI, then run it from the app directory:
+
+```sh
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+cd cmd/remote
+wails dev
+```
+
+The frontend is dependency-free and its static assets are embedded in the Go binary, so no Node.js install or frontend build step is required.
+
+### Discovery App
+
+The `discovery` app allows you to locate Google Cast devices on your network via the command line.
+
+```sh
+go run cmd/discovery/*.go
+```
+
+Alternatively, build the executable:
+
+```sh
+go build -o ./bin/discovery ./cmd/discovery
+```
 
 ### Receiver App
 
@@ -33,34 +55,6 @@ Or to build an executable in `./bin/receiver`:
 ```sh
 go build -o ./bin/receiver ./cmd/receiver
 ```
-
-### Discovery App
-
-The `discovery` app allows you to locate Google Cast devices on your network, using mDNS.
-
-To run the discovery app in your local dev environment:
-
-```sh
-go run cmd/discovery/*.go
-```
-
-Or to build an executable in `./bin/discovery`:
-
-```sh
-go build -o ./bin/discovery ./cmd/discovery
-```
-
-### GoCast Remote
-
-The Wails remote control discovers and lists Google Cast devices on the local network. Install the Wails CLI, then run it from the app directory:
-
-```sh
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
-cd cmd/remote
-wails dev
-```
-
-The frontend is dependency-free and its static assets are embedded in the Go binary, so no Node.js install or frontend build step is required.
 
 ## Cert Manifests
 
@@ -147,7 +141,11 @@ See the [README](./worker/README.md) for more details.
 
 ## Development
 
-All development is done using Go 1.18, across Ubuntu Linux and macOS. Support for other platforms (including Windows) is unknown at this point in time. Contributions for cross-platform support are welcomed!
+The following architecture diagram summarises the overall design of the GoCast Receiver app, and how it accommodates the requirements of the Google Cast protocol:
+
+![Receiver Architecture](./doc/receiver-architecture.drawio.png)
+
+In terms of actual code, these concepts are implemented as Go structs.
 
 ### Protobuf
 
@@ -157,7 +155,7 @@ The Chromecast protocol relies on message types defined in protobuf format. The 
 protoc --go_opt=paths=source_relative --go_out=. ./internal/channel/cast_channel.proto
 ```
 
-## Tests
+### Tests
 
 Tests have been written in the style of unit tests.
 
