@@ -57,11 +57,29 @@ type WebrtcMessage struct {
 }
 
 type SupportedStream struct {
-	AesIvMask string `json:"aesIvMask"`
-	AesKey    string `json:"aesKey"`
-	Index     int    `json:"index"`
-	Ssrc      uint32 `json:"ssrc"`
-	Type      string `json:"type"`
+	AesIvMask      string `json:"aesIvMask"`
+	AesKey         string `json:"aesKey"`
+	CodecName      string `json:"codecName"`
+	Index          int    `json:"index"`
+	RtpPayloadType int    `json:"rtpPayloadType"`
+	Ssrc           uint32 `json:"ssrc"`
+	Type           string `json:"type"`
+}
+
+const (
+	videoSourceStreamType = "video_source"
+	vp8CodecName          = "vp8"
+)
+
+func selectVP8VideoStream(streams []SupportedStream) *SupportedStream {
+	for i := range streams {
+		stream := &streams[i]
+		if stream.Type == videoSourceStreamType && stream.CodecName == vp8CodecName {
+			return stream
+		}
+	}
+
+	return nil
 }
 
 type Offer struct {
@@ -130,42 +148,43 @@ func (session *Session) handleWebrtcOffer(castMessage *channel.CastMessage) {
 		return
 	}
 
-	var receiverRtcpEventLog []int
-	var sendIndexes []int
-	var ssrcs []uint32
+	receiverRtcpEventLog := make([]int, 0, 1)
+	sendIndexes := make([]int, 0, 1)
+	ssrcs := make([]uint32, 0, 1)
 
-	for _, supportedStream := range request.Offer.SupportedStreams {
-		if supportedStream.Type == "video_source" {
-			senderSsrc := supportedStream.Ssrc
-			receiverSsrc := supportedStream.Ssrc + 1
+	supportedStream := selectVP8VideoStream(request.Offer.SupportedStreams)
+	if supportedStream != nil {
+		senderSsrc := supportedStream.Ssrc
+		receiverSsrc := supportedStream.Ssrc + 1
 
-			receiverRtcpEventLog = append(receiverRtcpEventLog, supportedStream.Index)
-			sendIndexes = append(sendIndexes, supportedStream.Index)
-			ssrcs = append(ssrcs, receiverSsrc)
+		receiverRtcpEventLog = append(receiverRtcpEventLog, supportedStream.Index)
+		sendIndexes = append(sendIndexes, supportedStream.Index)
+		ssrcs = append(ssrcs, receiverSsrc)
 
-			key, _ := hex.DecodeString(supportedStream.AesKey)
-			iv, _ := hex.DecodeString(supportedStream.AesIvMask)
+		key, _ := hex.DecodeString(supportedStream.AesKey)
+		iv, _ := hex.DecodeString(supportedStream.AesIvMask)
 
-			decrypter := NewDecrypter(key, iv)
+		decrypter := NewDecrypter(key, iv)
 
-			decode := func(buffer []byte, frameId int) {
-				plaintext := make([]byte, len(buffer))
-				session.log.Info(fmt.Sprintf("decrypting %d bytes", len(buffer)), "frame id", frameId)
-				n := decrypter.Decrypt(buffer, plaintext)
-				session.log.Info(fmt.Sprintf("decrypted %d bytes", n))
-				session.decodeBuffer(plaintext)
-				decrypter.Reset(frameId + 1)
-			}
-
-			sendRtcp := func(buffer []byte, addr net.Addr) {
-				if _, err := session.packetConn.WriteTo(buffer, addr); err != nil {
-					session.log.Warn("failed to write rtcp packet", "err", err)
-				}
-			}
-
-			logger := common.NewLogger(fmt.Sprintf("stream (%d)", supportedStream.Ssrc))
-			session.streams[senderSsrc] = NewStream(decode, logger, sendRtcp, receiverSsrc, senderSsrc)
+		decode := func(buffer []byte, frameId int) {
+			plaintext := make([]byte, len(buffer))
+			session.log.Info(fmt.Sprintf("decrypting %d bytes", len(buffer)), "frame id", frameId)
+			n := decrypter.Decrypt(buffer, plaintext)
+			session.log.Info(fmt.Sprintf("decrypted %d bytes", n))
+			session.decodeBuffer(plaintext)
+			decrypter.Reset(frameId + 1)
 		}
+
+		sendRtcp := func(buffer []byte, addr net.Addr) {
+			if _, err := session.packetConn.WriteTo(buffer, addr); err != nil {
+				session.log.Warn("failed to write rtcp packet", "err", err)
+			}
+		}
+
+		logger := common.NewLogger(fmt.Sprintf("stream (%d)", supportedStream.Ssrc))
+		session.streams[senderSsrc] = NewStream(decode, logger, sendRtcp, receiverSsrc, senderSsrc)
+	} else {
+		session.log.Warn("offer contains no supported VP8 video stream")
 	}
 
 	response := webrtcAnswerMessage{
